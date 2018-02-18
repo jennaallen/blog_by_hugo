@@ -1,0 +1,2290 @@
+---
+title: 'Football Fans: A Data-Driven Approach to College Selection'
+author: Jenna Allen
+date: '2018-02-17'
+slug: football-fans-a-data-driven-approach-to-college-selection
+categories:
+  - R
+tags:
+  - data-warehousing
+  - aws-rds
+  - tableau
+  - data-manipulation
+  - college-scorecard
+  - football-data
+---
+
+
+
+<p>This was a project that I originally did for my Data Warehousing class in grad school using Microsoft SQL server and SSIS. I’ve been taking a lot of datacamp courses lately and wanted to put what I learned about the tidyverse into action. This project has a lot of data manipulation and cleanup tasks, so I thought it would be a good candidate to convert what I did in grad school to R and MySQL. Enjoy!</p>
+<div id="abstract" class="section level1">
+<h1>Abstract</h1>
+<p>Using a dimensional model, data warehouse, and Tableau I explored data from the College Scorecard and NCAA Division I FBS football games to create a data-driven approach to school selection for college football fans.</p>
+</div>
+<div id="data-warehouse-opportunity-and-objectives" class="section level1">
+<h1>Data Warehouse Opportunity and Objectives</h1>
+<p>For many students in the United States, NCAA Division I football is an important part of their student life and college experience. It is also my biased opinion that college football is fun to watch, especially when you have an emotional investment in one of the teams playing. Thus, I saw an opportunity to create a data-driven approach to school selection for college football fans.</p>
+<p>The data-driven approach included several objectives:</p>
+<ul>
+<li>Retrieve data from the College Scorecard using the available API</li>
+<li>Scrape NCAA Division I FBS college football game scores from the web</li>
+<li>Cleanup and transform the data</li>
+<li>Create a dimensional data model<br />
+</li>
+<li>Load the data into a MySQL data warehouse running on AWS</li>
+<li>Create an interactive dashboard that allows users to input certain criteria regarding school location, size, graduation rate, total cost, etc. and get back a filtered list of schools showing a map of the school location, tuition and fee cost per win, point differential per game, points per game, etc.</li>
+</ul>
+<pre class="r"><code>library(RMySQL)
+library(data.table)
+library(utils)
+library(tidyverse)
+library(rscorecard)
+library(rvest)
+library(stringdist)
+library(lubridate)</code></pre>
+</div>
+<div id="source-data" class="section level1">
+<h1>Source Data</h1>
+<div id="college-scorecard-school-data" class="section level2">
+<h2>College Scorecard School Data</h2>
+<p>There are two data sources for this project. I am using the available API provided by <a href="https://collegescorecard.ed.gov/data/documentation/">College Scorecard</a> to extract the relevant school data. The College Scorecard combines data from the Integrated Postsecondary Education Data System (IPEDS), National Student Loan Data System (NSLDS), and various other sources into one dataset and makes it available through an API. The extraction process includes selecting the desired data fields (there are a ton to choose from), determining which years to pull data for, and creating the API call to return the data. The API is preferred to navigating to the IPEDS website, for example, and exporting the data via CSV, which you can do. The API allows for much easier access to the data and can be easily updated when new data becomes available. The latest full dataset available is for the 2015-2016 school year. I will be extracting the last 5 school years worth of data (2011-2012, 2012-2013, 2013-2014, 2014-2015, 2015-2016).</p>
+<p>In R, there is an existing package called rscorecard that “provides a series of piped functions (a la dplyr) to facilitate downloading Department of Education College Scorecard data. In reality it is simply a method for converting idiomatic R code into a properly formatted URL string that is then queried.” This package does require an API key which I requested <a href="https://api.data.gov/signup/">here</a>. I added the API key to a .Renviron file to maintain security <a href="https://db.rstudio.com/best-practices/managing-credentials/">best practices</a>.</p>
+<pre class="r"><code>years &lt;- seq(2011, 2015)</code></pre>
+<pre class="r"><code># get school data for all 4-year schools that are public or private non-profit for desired years and combine it all into one tibble
+school_data_staging &lt;- map_dfr(years, ~
+  sc_init() %&gt;%
+    sc_filter(ICLEVEL == 1, CONTROL == 1:2) %&gt;%
+    sc_select(UNITID, OPEID, OPEID6, INSTNM, CITY, STABBR, ZIP, INSTURL, MAIN, CONTROL, REGION, LATITUDE, LONGITUDE, ADM_RATE, SATVR25, SATVR75, SATMT25, SATMT75, SATVRMID, SATMTMID, ACTCM25, ACTCM75, ACTEN25, ACTEN75, ACTMT25, ACTMT75, ACTCMMID, ACTENMID, ACTMTMID, UGDS, TUITIONFEE_IN, TUITIONFEE_OUT, C150_4, RET_FT4, PCTFLOAN, GRAD_DEBT_MDN, GRAD_DEBT_MDN10YR, LOAN_EVER, ALIAS, C100_4, ICLEVEL) %&gt;%
+    sc_year(.x) %&gt;%
+    sc_get()
+)</code></pre>
+<table>
+<caption><span id="tab:show-raw-school-data">Table 1: </span>Raw School Data</caption>
+<thead>
+<tr class="header">
+<th align="right">satvrmid</th>
+<th align="right">c100_4</th>
+<th align="right">loan_ever</th>
+<th align="right">satmt75</th>
+<th align="right">actcm75</th>
+<th align="right">acten75</th>
+<th align="right">actmtmid</th>
+<th align="right">main</th>
+<th align="left">city</th>
+<th align="right">satvr25</th>
+<th align="right">pctfloan</th>
+<th align="right">ret_ft4</th>
+<th align="right">iclevel</th>
+<th align="left">zip</th>
+<th align="right">latitude</th>
+<th align="right">satmtmid</th>
+<th align="right">satmt25</th>
+<th align="right">ugds</th>
+<th align="right">actcmmid</th>
+<th align="left">stabbr</th>
+<th align="left">alias</th>
+<th align="right">unitid</th>
+<th align="right">region</th>
+<th align="right">longitude</th>
+<th align="left">instnm</th>
+<th align="right">actcm25</th>
+<th align="right">c150_4</th>
+<th align="right">tuitionfee_in</th>
+<th align="right">control</th>
+<th align="right">grad_debt_mdn</th>
+<th align="right">actmt75</th>
+<th align="right">opeid6</th>
+<th align="right">tuitionfee_out</th>
+<th align="left">insturl</th>
+<th align="right">acten25</th>
+<th align="right">actenmid</th>
+<th align="right">satvr75</th>
+<th align="right">opeid</th>
+<th align="right">actmt25</th>
+<th align="right">adm_rate</th>
+<th align="right">grad_debt_mdn10yr</th>
+<th align="right">year</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">570</td>
+<td align="right">0.2488538</td>
+<td align="right">0.8158580</td>
+<td align="right">630</td>
+<td align="right">27</td>
+<td align="right">28</td>
+<td align="right">25</td>
+<td align="right">1</td>
+<td align="left">Tampa</td>
+<td align="right">520</td>
+<td align="right">0.4489</td>
+<td align="right">0.8752</td>
+<td align="right">1</td>
+<td align="left">33620-9951</td>
+<td align="right">28.05665</td>
+<td align="right">585</td>
+<td align="right">540</td>
+<td align="right">29232</td>
+<td align="right">25</td>
+<td align="left">FL</td>
+<td align="left">USF Main Campus |USF Tampa Campus |USF Tampa |USF</td>
+<td align="right">137351</td>
+<td align="right">5</td>
+<td align="right">-82.41588</td>
+<td align="left">University of South Florida-Main Campus</td>
+<td align="right">23</td>
+<td align="right">0.5171</td>
+<td align="right">5800</td>
+<td align="right">1</td>
+<td align="right">17500</td>
+<td align="right">27</td>
+<td align="right">1537</td>
+<td align="right">14990</td>
+<td align="left">www.usf.edu</td>
+<td align="right">22</td>
+<td align="right">25</td>
+<td align="right">620</td>
+<td align="right">153700</td>
+<td align="right">23</td>
+<td align="right">0.3805</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+</tr>
+<tr class="even">
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.6935032</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Clearwater</td>
+<td align="right">NA</td>
+<td align="right">0.3461</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">33760-2822</td>
+<td align="right">27.90260</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">28077</td>
+<td align="right">NA</td>
+<td align="left">FL</td>
+<td align="left">SPC, Saint Petersburg College, St. Petersburg College</td>
+<td align="right">137078</td>
+<td align="right">5</td>
+<td align="right">-82.71732</td>
+<td align="left">St Petersburg College</td>
+<td align="right">NA</td>
+<td align="right">0.2766</td>
+<td align="right">2988</td>
+<td align="right">1</td>
+<td align="right">12500</td>
+<td align="right">NA</td>
+<td align="right">1528</td>
+<td align="right">10897</td>
+<td align="left">www.spcollege.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">152800</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+</tr>
+<tr class="odd">
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.2994798</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Fort Lauderdale</td>
+<td align="right">NA</td>
+<td align="right">0.1406</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">33301</td>
+<td align="right">26.07972</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">37774</td>
+<td align="right">NA</td>
+<td align="left">FL</td>
+<td align="left">BC</td>
+<td align="right">132709</td>
+<td align="right">5</td>
+<td align="right">-80.23541</td>
+<td align="left">Broward College</td>
+<td align="right">NA</td>
+<td align="right">0.2536</td>
+<td align="right">2446</td>
+<td align="right">1</td>
+<td align="right">6500</td>
+<td align="right">NA</td>
+<td align="right">1500</td>
+<td align="right">2446</td>
+<td align="left">www.broward.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">150000</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+</tr>
+<tr class="even">
+<td align="right">NA</td>
+<td align="right">0.1111111</td>
+<td align="right">0.7887324</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Lithonia</td>
+<td align="right">NA</td>
+<td align="right">0.5049</td>
+<td align="right">0.0000</td>
+<td align="right">1</td>
+<td align="left">30038-9869</td>
+<td align="right">33.69798</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">482</td>
+<td align="right">NA</td>
+<td align="left">GA</td>
+<td align="left">NA</td>
+<td align="right">135364</td>
+<td align="right">5</td>
+<td align="right">-84.12365</td>
+<td align="left">Luther Rice College &amp; Seminary</td>
+<td align="right">NA</td>
+<td align="right">0.1111</td>
+<td align="right">5520</td>
+<td align="right">2</td>
+<td align="right">18750</td>
+<td align="right">NA</td>
+<td align="right">31009</td>
+<td align="right">5520</td>
+<td align="left">www.lutherrice.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">3100900</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+</tr>
+<tr class="odd">
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.5679661</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Bradenton</td>
+<td align="right">NA</td>
+<td align="right">0.2949</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">34207</td>
+<td align="right">27.43607</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">10182</td>
+<td align="right">NA</td>
+<td align="left">FL</td>
+<td align="left">SCF</td>
+<td align="right">135391</td>
+<td align="right">5</td>
+<td align="right">-82.59174</td>
+<td align="left">State College of Florida-Manatee-Sarasota</td>
+<td align="right">NA</td>
+<td align="right">0.3210</td>
+<td align="right">3074</td>
+<td align="right">1</td>
+<td align="right">9450</td>
+<td align="right">NA</td>
+<td align="right">1504</td>
+<td align="right">11597</td>
+<td align="left">www.scf.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">150400</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="football-data" class="section level2">
+<h2>Football Data</h2>
+<p>For the football data, I am going to scrape data from <a href="http://www.sports-reference.com" class="uri">http://www.sports-reference.com</a>, a sports statistics clearinghouse that allows free downloads of data. You can export this data to CSV, but I’m going to scrape it so I don’t have to deal with multiple CSV files. To mirror the school data, I will be extracting the data for the same school years as mentioned above (2011-2012, 2012-2013, 2013-2014, 2014-2015, 2015-2016). I’ll also be getting data for bowl games. This data is on a separate webpage of the site.</p>
+<pre class="r"><code>get_football_data &lt;- function(games, years) {
+  if (!(games %in% c(&quot;schedule&quot;, &quot;bowls&quot;))) {
+    stop(&quot;Argument must be either &#39;schedule&#39; or &#39;bowls&#39;&quot;, call. = FALSE)
+  }
+  # create urls based on the desired years and if user wants all games or bowl games
+  urls &lt;- paste0(&quot;https://www.sports-reference.com/cfb/years/&quot;,years,&quot;-&quot;,games,&quot;.html&quot;)
+
+  # get html from urls
+  urls_html &lt;- map(urls, ~ read_html(.x))
+
+  # get the data for each url and combine it into one data table
+  football_data &lt;- rbindlist(map(urls_html, ~ .x %&gt;%
+                                   html_nodes(&quot;table&quot;) %&gt;%
+                                   .[[1]] %&gt;%
+                                   html_table()), fill = TRUE) # fill = true here because different years have different columns included in the data
+  return(football_data)
+}</code></pre>
+<pre class="r"><code>football_data_staging &lt;- get_football_data(&quot;schedule&quot;, years)
+football_data_staging_bowls &lt;- get_football_data(&quot;bowls&quot;, years)</code></pre>
+<table>
+<caption><span id="tab:show-raw-games">Table 2: </span>Raw Regular Season Data</caption>
+<thead>
+<tr class="header">
+<th align="left">Rk</th>
+<th align="left">Wk</th>
+<th align="left">Date</th>
+<th align="left">Day</th>
+<th align="left">Winner</th>
+<th align="left">Pts</th>
+<th align="left">V1</th>
+<th align="left">Loser</th>
+<th align="left">Pts</th>
+<th align="left">Notes</th>
+<th align="left">Time</th>
+<th align="left">TV</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">1</td>
+<td align="left">1</td>
+<td align="left">Sep 1, 2011</td>
+<td align="left">Thu</td>
+<td align="left">Arizona State</td>
+<td align="left">48</td>
+<td align="left"></td>
+<td align="left">California-Davis</td>
+<td align="left">14</td>
+<td align="left"></td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="even">
+<td align="left">2</td>
+<td align="left">1</td>
+<td align="left">Sep 1, 2011</td>
+<td align="left">Thu</td>
+<td align="left">Bowling Green State</td>
+<td align="left">32</td>
+<td align="left">@</td>
+<td align="left">Idaho</td>
+<td align="left">15</td>
+<td align="left"></td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="odd">
+<td align="left">3</td>
+<td align="left">1</td>
+<td align="left">Sep 1, 2011</td>
+<td align="left">Thu</td>
+<td align="left">Central Michigan</td>
+<td align="left">21</td>
+<td align="left"></td>
+<td align="left">South Carolina State</td>
+<td align="left">6</td>
+<td align="left"></td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="even">
+<td align="left">4</td>
+<td align="left">1</td>
+<td align="left">Sep 1, 2011</td>
+<td align="left">Thu</td>
+<td align="left">Florida International</td>
+<td align="left">41</td>
+<td align="left"></td>
+<td align="left">North Texas</td>
+<td align="left">16</td>
+<td align="left"></td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="odd">
+<td align="left">5</td>
+<td align="left">1</td>
+<td align="left">Sep 1, 2011</td>
+<td align="left">Thu</td>
+<td align="left">Georgia Tech</td>
+<td align="left">63</td>
+<td align="left"></td>
+<td align="left">Western Carolina</td>
+<td align="left">21</td>
+<td align="left"></td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+</tbody>
+</table>
+<table>
+<caption><span id="tab:show-raw-bowls">Table 3: </span>Raw Bowl Data</caption>
+<thead>
+<tr class="header">
+<th align="left">Date</th>
+<th align="left">Bowl</th>
+<th align="left">Winner</th>
+<th align="right">Pts</th>
+<th align="left">Loser</th>
+<th align="right">Pts</th>
+<th align="left">Notes</th>
+<th align="left">Gametime</th>
+<th align="left">TV</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">2012-01-09</td>
+<td align="left">BCS Championship</td>
+<td align="left">Alabama</td>
+<td align="right">21</td>
+<td align="left">Louisiana State</td>
+<td align="right">0</td>
+<td align="left">New Orleans, LA</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="even">
+<td align="left">2012-01-08</td>
+<td align="left">GoDaddy.com Bowl</td>
+<td align="left">Northern Illinois</td>
+<td align="right">38</td>
+<td align="left">Arkansas State</td>
+<td align="right">20</td>
+<td align="left">Mobile, AL</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="odd">
+<td align="left">2012-01-07</td>
+<td align="left">BBVA Compass Bowl</td>
+<td align="left">Southern Methodist</td>
+<td align="right">28</td>
+<td align="left">Pittsburgh</td>
+<td align="right">6</td>
+<td align="left">Birmingham, AL</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="even">
+<td align="left">2012-01-06</td>
+<td align="left">Cotton Bowl</td>
+<td align="left">Arkansas</td>
+<td align="right">29</td>
+<td align="left">Kansas State</td>
+<td align="right">16</td>
+<td align="left">Arlington, TX</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+<tr class="odd">
+<td align="left">2012-01-04</td>
+<td align="left">Orange Bowl</td>
+<td align="left">West Virginia</td>
+<td align="right">70</td>
+<td align="left">Clemson</td>
+<td align="right">33</td>
+<td align="left">Miami, FL</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="data-cleanup" class="section level1">
+<h1>Data Cleanup</h1>
+<p>Now that I have all of the school and football data, I need to clean it up.</p>
+<div id="school-data" class="section level2">
+<h2>School Data</h2>
+<p>I’ll start with the school data. Overall, it’s in pretty good shape. The main things to do are rename the columns so they are a little more user friendly and decode columns like “CONTROL”, “ICLEVEL”, “REGION”, etc. so that instead of containing numbers they contain what those numbers mean (e.g. a “CONTROL” value of 1 means it is a public school).</p>
+<p>I’ll also include the full state name based on the state abbreviation. The decoded values file can be obtained from IPEDS (all of these columns come from that data source) or can be found in the <a href="https://collegescorecard.ed.gov/assets/CollegeScorecardDataDictionary.xlsx">College Scorecard data dictionary</a>. I have a CSV file containing relevant info for states. I will replace the numbers in the staging data with the more easily understood meanings using <code>dplyr::recode</code>.</p>
+<pre class="r"><code>clean_school_data &lt;- function(dirty_data) {
+  state_lookups &lt;- read_csv(&quot;https://raw.githubusercontent.com/jennaallen/football_schools/master/lookups.csv&quot;) %&gt;%
+    filter(VariableName == &quot;State abbreviation (HD2016)&quot;) %&gt;%
+    select(Value, ValueLabel)
+  
+  clean_data &lt;- dirty_data %&gt;%
+    mutate(region = recode(region,
+                           &quot;0&quot;  = &quot;US Service schools&quot;,
+                           &quot;1&quot;  = &quot;New England&quot;,
+                           &quot;2&quot;  = &quot;Mid East&quot;,
+                           &quot;3&quot;  = &quot;Great Lakes&quot;,
+                           &quot;4&quot;  = &quot;Plains&quot;,
+                           &quot;5&quot;  = &quot;Southeast&quot;,
+                           &quot;6&quot;  = &quot;Southwest&quot;,
+                           &quot;7&quot;  = &quot;Rocky Mountains&quot;,
+                           &quot;8&quot;  = &quot;Far West&quot;,
+                           &quot;9&quot;  = &quot;Outlying&quot;),
+           control = recode(control,
+                            &quot;1&quot; = &quot;Public&quot;,
+                            &quot;2&quot; = &quot;Private not-for-profit&quot;),
+           iclevel = recode(iclevel,
+                            &quot;1&quot; = &quot;4-year&quot;,
+                            &quot;2&quot; = &quot;2-year&quot;,
+                            &quot;3&quot; = &quot;Less-than-2-year&quot;),
+           zip = str_sub(zip, end = 5), # keep only the first 5 numbers for zip code; some values are missing dash between zip and zip +4 code
+          school_size_category = case_when(ugds &lt; 1000 ~ &quot;Under 1,000&quot;,
+                                           between(ugds, 1000, 4999) ~ &quot;1,000 - 4,999&quot;,
+                                           between(ugds, 5000, 9999) ~ &quot;5,000 - 9,999&quot;,
+                                           between(ugds, 10000, 19999) ~ &quot;10,000 - 19,999&quot;,
+                                           ugds &gt; 20000 ~ &quot;20,000 and above&quot;,
+                                           TRUE ~ NA_character_)) %&gt;%
+    left_join(state_lookups, by = c(&quot;stabbr&quot; = &quot;Value&quot;)) %&gt;%
+    rename(&quot;ACT_composite_25th_percentile&quot; = actcm25,
+           &quot;ACT_composite_75th_percentile&quot; = actcm75,
+           &quot;ACT_composite_midpoint&quot; = actcmmid,
+           &quot;ACT_english_25th_percentile&quot; = acten25,
+           &quot;ACT_english_75th_percentile&quot; = acten75,
+           &quot;ACT_english_midpoint&quot; = actenmid,
+           &quot;ACT_math_25th_percentile&quot; = actmt25,
+           &quot;ACT_math_75th_percentile&quot; = actmt75, 
+           &quot;ACT_math_midpoint&quot; = actmtmid,
+           &quot;school_admission_rate&quot; = adm_rate,
+           &quot;school_alias&quot; = alias,
+           &quot;school_graduation_rate_4yrs&quot; = c100_4,
+           &quot;school_graduation_rate_6yrs&quot; = c150_4,
+           &quot;school_city&quot; = city,
+           &quot;school_control&quot; = control,
+           &quot;school_median_debt_graduates&quot; = grad_debt_mdn,
+           &quot;school_median_debt_graduates_monthly_payments&quot; = grad_debt_mdn10yr,
+           &quot;school_name&quot; = instnm,
+           &quot;school_url&quot; = insturl,
+           &quot;school_latitude&quot; = latitude,
+           &quot;school_level&quot; = iclevel,
+           &quot;school_students_with_any_loan&quot; = loan_ever,
+           &quot;school_longitude&quot; = longitude,
+           &quot;school_main_campus_flag&quot; = main,
+           &quot;school_opeid8&quot; = opeid,
+           &quot;school_opeid6&quot; = opeid6,
+           &quot;school_federal_loan_rate&quot; = pctfloan,
+           &quot;school_region&quot; = region,
+           &quot;school_retention_rate&quot; = ret_ft4,
+           &quot;SAT_math_25th_percentile&quot; = satmt25,
+           &quot;SAT_math_75th_percentile&quot; = satmt75, 
+           &quot;SAT_math_midpoint&quot; = satmtmid,
+           &quot;SAT_reading_25th_percentile&quot; = satvr25,
+           &quot;SAT_reading_75th_percentile&quot; = satvr75, 
+           &quot;SAT_reading_midpoint&quot; = satvrmid,
+           &quot;school_st_abbr&quot; = stabbr,
+           &quot;school_in_state_price&quot; =  tuitionfee_in,
+           &quot;school_out_state_price&quot; = tuitionfee_out, 
+           &quot;school_size&quot; = ugds,
+           &quot;school_id&quot; = unitid,
+           &quot;school_state&quot; = ValueLabel,
+           &quot;school_year_start&quot; =  year,
+           &quot;school_zip&quot; = zip)
+  return(clean_data)
+}</code></pre>
+<pre class="r"><code>school_data_transform &lt;- clean_school_data(school_data_staging)</code></pre>
+<table>
+<caption><span id="tab:show-clean-school-data">Table 4: </span>Clean School Data</caption>
+<thead>
+<tr class="header">
+<th align="right">SAT_reading_midpoint</th>
+<th align="right">school_graduation_rate_4yrs</th>
+<th align="right">school_students_with_any_loan</th>
+<th align="right">SAT_math_75th_percentile</th>
+<th align="right">ACT_composite_75th_percentile</th>
+<th align="right">ACT_english_75th_percentile</th>
+<th align="right">ACT_math_midpoint</th>
+<th align="right">school_main_campus_flag</th>
+<th align="left">school_city</th>
+<th align="right">SAT_reading_25th_percentile</th>
+<th align="right">school_federal_loan_rate</th>
+<th align="right">school_retention_rate</th>
+<th align="left">school_level</th>
+<th align="left">school_zip</th>
+<th align="right">school_latitude</th>
+<th align="right">SAT_math_midpoint</th>
+<th align="right">SAT_math_25th_percentile</th>
+<th align="right">school_size</th>
+<th align="right">ACT_composite_midpoint</th>
+<th align="left">school_st_abbr</th>
+<th align="left">school_alias</th>
+<th align="right">school_id</th>
+<th align="left">school_region</th>
+<th align="right">school_longitude</th>
+<th align="left">school_name</th>
+<th align="right">ACT_composite_25th_percentile</th>
+<th align="right">school_graduation_rate_6yrs</th>
+<th align="right">school_in_state_price</th>
+<th align="left">school_control</th>
+<th align="right">school_median_debt_graduates</th>
+<th align="right">ACT_math_75th_percentile</th>
+<th align="right">school_opeid6</th>
+<th align="right">school_out_state_price</th>
+<th align="left">school_url</th>
+<th align="right">ACT_english_25th_percentile</th>
+<th align="right">ACT_english_midpoint</th>
+<th align="right">SAT_reading_75th_percentile</th>
+<th align="right">school_opeid8</th>
+<th align="right">ACT_math_25th_percentile</th>
+<th align="right">school_admission_rate</th>
+<th align="right">school_median_debt_graduates_monthly_payments</th>
+<th align="right">school_year_start</th>
+<th align="left">school_size_category</th>
+<th align="left">school_state</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">570</td>
+<td align="right">0.2488538</td>
+<td align="right">0.8158580</td>
+<td align="right">630</td>
+<td align="right">27</td>
+<td align="right">28</td>
+<td align="right">25</td>
+<td align="right">1</td>
+<td align="left">Tampa</td>
+<td align="right">520</td>
+<td align="right">0.4489</td>
+<td align="right">0.8752</td>
+<td align="left">4-year</td>
+<td align="left">33620</td>
+<td align="right">28.05665</td>
+<td align="right">585</td>
+<td align="right">540</td>
+<td align="right">29232</td>
+<td align="right">25</td>
+<td align="left">FL</td>
+<td align="left">USF Main Campus |USF Tampa Campus |USF Tampa |USF</td>
+<td align="right">137351</td>
+<td align="left">Southeast</td>
+<td align="right">-82.41588</td>
+<td align="left">University of South Florida-Main Campus</td>
+<td align="right">23</td>
+<td align="right">0.5171</td>
+<td align="right">5800</td>
+<td align="left">Public</td>
+<td align="right">17500</td>
+<td align="right">27</td>
+<td align="right">1537</td>
+<td align="right">14990</td>
+<td align="left">www.usf.edu</td>
+<td align="right">22</td>
+<td align="right">25</td>
+<td align="right">620</td>
+<td align="right">153700</td>
+<td align="right">23</td>
+<td align="right">0.3805</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+<td align="left">20,000 and above</td>
+<td align="left">Florida</td>
+</tr>
+<tr class="even">
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.6935032</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Clearwater</td>
+<td align="right">NA</td>
+<td align="right">0.3461</td>
+<td align="right">NA</td>
+<td align="left">4-year</td>
+<td align="left">33760</td>
+<td align="right">27.90260</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">28077</td>
+<td align="right">NA</td>
+<td align="left">FL</td>
+<td align="left">SPC, Saint Petersburg College, St. Petersburg College</td>
+<td align="right">137078</td>
+<td align="left">Southeast</td>
+<td align="right">-82.71732</td>
+<td align="left">St Petersburg College</td>
+<td align="right">NA</td>
+<td align="right">0.2766</td>
+<td align="right">2988</td>
+<td align="left">Public</td>
+<td align="right">12500</td>
+<td align="right">NA</td>
+<td align="right">1528</td>
+<td align="right">10897</td>
+<td align="left">www.spcollege.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">152800</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+<td align="left">20,000 and above</td>
+<td align="left">Florida</td>
+</tr>
+<tr class="odd">
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.2994798</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Fort Lauderdale</td>
+<td align="right">NA</td>
+<td align="right">0.1406</td>
+<td align="right">NA</td>
+<td align="left">4-year</td>
+<td align="left">33301</td>
+<td align="right">26.07972</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">37774</td>
+<td align="right">NA</td>
+<td align="left">FL</td>
+<td align="left">BC</td>
+<td align="right">132709</td>
+<td align="left">Southeast</td>
+<td align="right">-80.23541</td>
+<td align="left">Broward College</td>
+<td align="right">NA</td>
+<td align="right">0.2536</td>
+<td align="right">2446</td>
+<td align="left">Public</td>
+<td align="right">6500</td>
+<td align="right">NA</td>
+<td align="right">1500</td>
+<td align="right">2446</td>
+<td align="left">www.broward.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">150000</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+<td align="left">20,000 and above</td>
+<td align="left">Florida</td>
+</tr>
+<tr class="even">
+<td align="right">NA</td>
+<td align="right">0.1111111</td>
+<td align="right">0.7887324</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Lithonia</td>
+<td align="right">NA</td>
+<td align="right">0.5049</td>
+<td align="right">0.0000</td>
+<td align="left">4-year</td>
+<td align="left">30038</td>
+<td align="right">33.69798</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">482</td>
+<td align="right">NA</td>
+<td align="left">GA</td>
+<td align="left">NA</td>
+<td align="right">135364</td>
+<td align="left">Southeast</td>
+<td align="right">-84.12365</td>
+<td align="left">Luther Rice College &amp; Seminary</td>
+<td align="right">NA</td>
+<td align="right">0.1111</td>
+<td align="right">5520</td>
+<td align="left">Private not-for-profit</td>
+<td align="right">18750</td>
+<td align="right">NA</td>
+<td align="right">31009</td>
+<td align="right">5520</td>
+<td align="left">www.lutherrice.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">3100900</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+<td align="left">Under 1,000</td>
+<td align="left">Georgia</td>
+</tr>
+<tr class="odd">
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">0.5679661</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">1</td>
+<td align="left">Bradenton</td>
+<td align="right">NA</td>
+<td align="right">0.2949</td>
+<td align="right">NA</td>
+<td align="left">4-year</td>
+<td align="left">34207</td>
+<td align="right">27.43607</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">10182</td>
+<td align="right">NA</td>
+<td align="left">FL</td>
+<td align="left">SCF</td>
+<td align="right">135391</td>
+<td align="left">Southeast</td>
+<td align="right">-82.59174</td>
+<td align="left">State College of Florida-Manatee-Sarasota</td>
+<td align="right">NA</td>
+<td align="right">0.3210</td>
+<td align="right">3074</td>
+<td align="left">Public</td>
+<td align="right">9450</td>
+<td align="right">NA</td>
+<td align="right">1504</td>
+<td align="right">11597</td>
+<td align="left">www.scf.edu</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">150400</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="right">2011</td>
+<td align="left">10,000 - 19,999</td>
+<td align="left">Florida</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="football-data-1" class="section level2">
+<h2>Football Data</h2>
+<p>The football data is a bit more messy than the school data. For example, the row headers are sometimes repeated in the middle of the dataset. Also, for some schools the ranking precedes the school name (i.e. “(2) Alabama”). As a part of the cleaning process for the football data, I’m also going to join in the bowl game information and create flags for which games were bowl games and which ones were national championship games.</p>
+<pre class="r"><code>clean_football_data &lt;- function(all_games, bowls) {
+  clean_bowls &lt;- bowls %&gt;% 
+    set_tidy_names() %&gt;%
+    as_tibble() %&gt;%
+    mutate_at(vars(Date), ymd) %&gt;% 
+    select(Date, Bowl, Winner)
+  clean_all_games &lt;- all_games %&gt;%
+    set_tidy_names() %&gt;% 
+    as_tibble() %&gt;%
+    rename(school_points = Pts..6, opponent_points = Pts..9, home_away = V1) %&gt;% 
+    mutate_all(funs(replace(., . == &#39;&#39;, NA))) %&gt;%
+    filter(!(Rk %in% &quot;Rk&quot;) &amp; !(Notes %like% &quot;Cancelled&quot;)) %&gt;%
+    mutate(school_rank = str_extract(Winner, &quot;\\d{1,2}&quot;),
+           opponent_rank = str_extract(Loser, &quot;\\d{1,2}&quot;),
+           school = str_replace(Winner, &quot;\\(\\d{1,2}\\)\\s&quot;, &quot;&quot;),
+           opponent = str_replace(Loser, &quot;\\(\\d{1,2}\\)\\s&quot;, &quot;&quot;),
+           school_game_site = case_when(home_away %in% &quot;@&quot; ~ &quot;away&quot;,
+                                        is.na(Notes) ~ &quot;home&quot;,
+                                        TRUE ~ &quot;neutral&quot;),
+           opponent_game_site = case_when(school_game_site %in% &quot;away&quot; ~ &quot;home&quot;,
+                                          school_game_site %in% &quot;home&quot; ~ &quot;away&quot;,
+                                          TRUE ~ &quot;neutral&quot;),
+           school_win = as.integer(1),
+           opponent_win = as.integer(0)) %&gt;%
+    mutate_at(vars(Rk, Wk, school_points, opponent_points, school_rank, opponent_rank), as.integer) %&gt;% 
+    mutate_at(vars(Date), mdy) %&gt;%
+    left_join(clean_bowls, by = c(&quot;Date&quot; = &quot;Date&quot;, &quot;school&quot; = &quot;Winner&quot;)) %&gt;% 
+    mutate(bowl_flag = if_else(!is.na(Bowl), 1, 0),
+           national_championship_flag = if_else(Bowl %like% &quot;Championship&quot;, 1, 0)) %&gt;%
+    mutate_at(vars(bowl_flag, national_championship_flag), as.integer) %&gt;%
+    rename(&quot;game_number&quot; = Rk,
+           &quot;football_week&quot; = Wk,
+           &quot;game_date&quot; = Date,
+           &quot;game_day&quot; = Day,
+           &quot;football_notes&quot; = Notes,
+           &quot;game_time&quot; = Time,
+           &quot;game_tv&quot; = TV,
+           &quot;bowl&quot; = Bowl) %&gt;% 
+    select(-Winner, -Loser, -home_away)
+  return(clean_all_games) 
+}</code></pre>
+<pre class="r"><code>football_data_transform &lt;- clean_football_data(football_data_staging, football_data_staging_bowls)</code></pre>
+<table>
+<caption><span id="tab:show-clean-football-data">Table 5: </span>Clean Football Data</caption>
+<thead>
+<tr class="header">
+<th align="right">game_number</th>
+<th align="right">football_week</th>
+<th align="left">game_date</th>
+<th align="left">game_day</th>
+<th align="right">school_points</th>
+<th align="right">opponent_points</th>
+<th align="left">football_notes</th>
+<th align="left">game_time</th>
+<th align="left">game_tv</th>
+<th align="right">school_rank</th>
+<th align="right">opponent_rank</th>
+<th align="left">school</th>
+<th align="left">opponent</th>
+<th align="left">school_game_site</th>
+<th align="left">opponent_game_site</th>
+<th align="right">school_win</th>
+<th align="right">opponent_win</th>
+<th align="left">bowl</th>
+<th align="right">bowl_flag</th>
+<th align="right">national_championship_flag</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="left">2011-09-01</td>
+<td align="left">Thu</td>
+<td align="right">48</td>
+<td align="right">14</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">Arizona State</td>
+<td align="left">California-Davis</td>
+<td align="left">home</td>
+<td align="left">away</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">2</td>
+<td align="right">1</td>
+<td align="left">2011-09-01</td>
+<td align="left">Thu</td>
+<td align="right">32</td>
+<td align="right">15</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">Bowling Green State</td>
+<td align="left">Idaho</td>
+<td align="left">away</td>
+<td align="left">home</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="right">3</td>
+<td align="right">1</td>
+<td align="left">2011-09-01</td>
+<td align="left">Thu</td>
+<td align="right">21</td>
+<td align="right">6</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">Central Michigan</td>
+<td align="left">South Carolina State</td>
+<td align="left">home</td>
+<td align="left">away</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">4</td>
+<td align="right">1</td>
+<td align="left">2011-09-01</td>
+<td align="left">Thu</td>
+<td align="right">41</td>
+<td align="right">16</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">Florida International</td>
+<td align="left">North Texas</td>
+<td align="left">home</td>
+<td align="left">away</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="right">5</td>
+<td align="right">1</td>
+<td align="left">2011-09-01</td>
+<td align="left">Thu</td>
+<td align="right">63</td>
+<td align="right">21</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">Georgia Tech</td>
+<td align="left">Western Carolina</td>
+<td align="left">home</td>
+<td align="left">away</td>
+<td align="right">1</td>
+<td align="right">0</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+<p>Ok, I have all the school and football data I want and it’s cleaned up. Now, I’m ready to create the data model.</p>
+</div>
+</div>
+<div id="dimensional-model" class="section level1">
+<h1>Dimensional Model</h1>
+<p>I am going to store this data in MySQL running on AWS RDS. To initially setup an AWS RDS instance, I loosely followed these <a href="http://www.jason-french.com/blog/2014/07/03/using-r-with-mysql-databases/">directions</a>.</p>
+<p>For this project, I’m going to use a star schema. The first step in creating the dimensional data model is profiling the data in order to better understand how the data from the two different sources fits together. During this profiling step, I determined what data types best fit each attribute in both data sets and what sizes to make each data type.</p>
+<pre class="r"><code>school_data_char_length &lt;- school_data_transform %&gt;% 
+  map(~ max(nchar(.x), na.rm = TRUE))
+
+school_data_transform %&gt;% 
+  mutate_if(is.character, as.factor) %&gt;% 
+  summary()
+  
+football_data_char_length &lt;- football_data_transform %&gt;% 
+  map(~ max(nchar(.x), na.rm = TRUE))
+
+football_data_transform %&gt;% 
+  mutate_if(is.character, as.factor) %&gt;% 
+  summary()</code></pre>
+<p>I also created the business rules that govern the data:</p>
+<ul>
+<li>Each school is defined as a four year university or college located within the United States of America</li>
+<li>Each football game is played by two and only two universities</li>
+<li>Each football game is played by at least one university that is designated by the NCAA as an FBS (Football Bowl Subdivision) football program</li>
+<li>School year is defined as the twelve months starting in August of a given year and ending in July of the following calendar year</li>
+<li>A National Championship game is also considered a bowl game</li>
+<li>Regular season games with text in the notes field and bowls games are considered to be played on neutral territory</li>
+<li>A school can have many school facts</li>
+<li>A school fact is associated to only one school</li>
+<li>A school can have many game facts</li>
+<li>A game fact is associated to only one school</li>
+<li>A school year can have many school facts</li>
+<li>A school fact is associated to only one school year</li>
+<li>A school year is associated with many dates</li>
+<li>A date can have only one school year</li>
+<li>A date is associated with many games</li>
+<li>A game can have only one date</li>
+</ul>
+<p>One tricky aspect of this data set is the conformed dimension. The conformed dimension in the data warehouse between the two data sources is the school name. However, the syntax for school name is different between the two data sources (i.e. Ohio State vs. Ohio State University). Thus, to be able to join the school and football data sets together, I need to perform fuzzy text matching.</p>
+<p>Other challenging aspects of modeling this data are how best to handle the dynamic of dimSchool being a role playing dimension, as well as schools sometimes being winners and sometimes losers. I eventually settled on the solution of loading each game into the factGame table twice, with each role through the perspective of each school playing in that game. I also decided to add in a dimDate attribute of school year, and then snowflake it. I did this in order to better handle the grain discrepancy between the football game data (played on a specific date) and the school data (tied to a school year) when trying to report on the two sets of data at once. Having only the school year in the school data created a many to many relationship and snowflaking this dimension solved that issue.</p>
+<div id="fact-tables" class="section level2">
+<h2>Fact Tables</h2>
+<ul>
+<li>factSchool – This table contains all facts related to a given school, uses school_year_sk and school_sk as surrogate keys</li>
+<li>factGame – This table contains all facts related to a game; date_sk, school_sk, and opponent_sk are the surrogate keys.</li>
+</ul>
+</div>
+<div id="dimension-tables" class="section level2">
+<h2>Dimension Tables</h2>
+<ul>
+<li>dimSchool – This table contains dimensions for a given school; school_sk is the surrogate key. school_sk is a role playing dimension for the factGame table</li>
+<li>dimSchoolYear – This table contains the school year that relates to school facts; school_year_sk is the surrogate key.</li>
+<li>dimDate – This table contains specific dates for when a game was played and the school year in which the game was played</li>
+</ul>
+<p>Here is the final data model created in <a href="https://www.mysql.com/products/workbench/">MySQL Workbench</a>.</p>
+<div class="figure">
+<img src="/img/final_datamodel.jpeg" />
+
+</div>
+</div>
+</div>
+<div id="fuzzy-text-matching" class="section level1">
+<h1>Fuzzy Text Matching</h1>
+<p>As mentioned previously, the only variable that ties the school data and the football data together is the school name. Thus, in order to be able to join the two data sets together, I need to create a lookup table that contains the school name from the football data and the corresponding school name from the school data. We’ll use fuzzy text matching in R to create this table.</p>
+<p>I created a function to perform the fuzzy text matching. One benefit of this function is that it allows the user to concatenate text to the football school names. This is important because several of the school names from the football data are shortened (e.g Arizona instead of The University of Arizona). The function allows users to concatenate text either before or after the football school name, if so desired. This can improve the fuzzy matching in some cases.</p>
+<p>A cross join is used to match up all the football names with all of the school names so each combination can be assessed for string distance. I’m using all available string distance methods so I can filter the data based on the method(s) that provide the best results. The definitions of the different string distance methods can be found <a href="https://www.rdocumentation.org/packages/stringdist/versions/0.9.4.6/topics/stringdist-metrics">here</a></p>
+<pre class="r"><code>fuzzy_text_matching &lt;- function(x, y, text = NULL, before_after = NULL) {
+  # x = transformed school data
+  # y = transformed football data
+  # get unique school names
+  unique_school_names &lt;- x %&gt;% 
+    filter(school_year_start == 2015 &amp; school_main_campus_flag == 1) %&gt;% 
+    select(school_name) %&gt;%
+    distinct() %&gt;% 
+    mutate(dummy = 1) # create dummy variable to join on
+
+  # get unique football school names by combining values in the school and opponent columns into one column
+  unique_football_names &lt;- y %&gt;% 
+    select(school, opponent) %&gt;% 
+    gather(&quot;delete&quot;, &quot;football_name&quot;, 1:2) %&gt;%
+    select(football_name) %&gt;% 
+    distinct() %&gt;% 
+    mutate(dummy = 1) # create dummy variable to join on
+
+  # use stringdist for fuzzy text matching; run through all possible methods used for distance calculation
+  # cross join football names with all school names (227 football names * 2187 school names = 496449 possible combinations)
+  ft_all &lt;- unique_football_names %&gt;% 
+    mutate(low_football_name = tolower(football_name)) %&gt;% 
+    inner_join(unique_school_names, by = &quot;dummy&quot;) %&gt;% # join on dummy variable to essentially do a cross join
+    mutate(low_school_name = tolower(school_name)) 
+  
+  method_list &lt;- c(&quot;osa&quot;, &quot;lv&quot;, &quot;dl&quot;, &quot;hamming&quot;, &quot;lcs&quot;, &quot;qgram&quot;, &quot;cosine&quot;, &quot;jaccard&quot;, &quot;jw&quot;, &quot;soundex&quot;)
+  if (is.null(text) &amp; is.null(before_after)) {
+    ft_result &lt;- method_list %&gt;% 
+      map_dfc(~ tibble(stringdist(ft_all$low_football_name, ft_all$low_school_name, method = .x))) %&gt;% 
+      set_names(method_list) %&gt;% 
+      bind_cols(ft_all, .) %&gt;% 
+      select(-dummy, -low_school_name, -low_football_name)
+  } else if (is.null(text) &amp; !is.null(before_after)) {
+      stop(&quot;Text to concantenate with football name is missing&quot;, call. = FALSE)
+  } else if (!is.null(text) &amp; is.null(before_after)) {
+      stop(&quot;Please specify if text should be concantenated before or after the football name&quot;, call. = FALSE)
+  } else if (!(before_after %in% c(&quot;before&quot;, &quot;after&quot;))) {
+      stop(&quot;The &#39;before_after&#39; argument must have a value of before or after&quot;, call. = FALSE)
+  } else if (before_after == &quot;before&quot;) {
+    ft_before &lt;- ft_all %&gt;%
+      mutate(text_football_name = paste(tolower(text), low_football_name))
+    ft_result &lt;- method_list %&gt;% 
+      map_dfc(~ tibble(stringdist(ft_before$text_football_name, ft_before$low_school_name, method = .x))) %&gt;% 
+      set_names(method_list) %&gt;% 
+      bind_cols(ft_before, .) %&gt;% 
+      select(-text_football_name, -dummy, -low_school_name, -low_football_name)
+  } else {
+    ft_after &lt;- ft_all %&gt;%
+      mutate(football_name_text = paste(low_football_name, tolower(text)))
+    ft_result &lt;- method_list %&gt;% 
+      map_dfc(~ tibble(stringdist(ft_after$football_name_text, ft_after$low_school_name, method = .x))) %&gt;% 
+      set_names(method_list) %&gt;% 
+      bind_cols(ft_after, .) %&gt;% 
+      select(-football_name_text, -dummy, -low_school_name, -low_football_name)
+  }
+  return(ft_result)
+}</code></pre>
+<pre class="r"><code>fuzzy_text_res &lt;- fuzzy_text_matching(school_data_transform, football_data_transform)</code></pre>
+<table>
+<caption><span id="tab:show-fuzzy-matches">Table 6: </span>Fuzzy Text Matching Output</caption>
+<thead>
+<tr class="header">
+<th align="left">football_name</th>
+<th align="left">school_name</th>
+<th align="right">osa</th>
+<th align="right">lv</th>
+<th align="right">dl</th>
+<th align="right">hamming</th>
+<th align="right">lcs</th>
+<th align="right">qgram</th>
+<th align="right">cosine</th>
+<th align="right">jaccard</th>
+<th align="right">jw</th>
+<th align="right">soundex</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Arizona State</td>
+<td align="left">University of South Florida-Main Campus</td>
+<td align="right">33</td>
+<td align="right">33</td>
+<td align="right">33</td>
+<td align="right">Inf</td>
+<td align="right">38</td>
+<td align="right">28</td>
+<td align="right">0.2909866</td>
+<td align="right">0.5714286</td>
+<td align="right">0.4581197</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">Arizona State</td>
+<td align="left">St Petersburg College</td>
+<td align="right">18</td>
+<td align="right">18</td>
+<td align="right">18</td>
+<td align="right">Inf</td>
+<td align="right">26</td>
+<td align="right">20</td>
+<td align="right">0.5120500</td>
+<td align="right">0.6250000</td>
+<td align="right">0.5564713</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Arizona State</td>
+<td align="left">Broward College</td>
+<td align="right">12</td>
+<td align="right">12</td>
+<td align="right">12</td>
+<td align="right">Inf</td>
+<td align="right">18</td>
+<td align="right">18</td>
+<td align="right">0.5449842</td>
+<td align="right">0.6875000</td>
+<td align="right">0.5273504</td>
+<td align="right">1</td>
+</tr>
+<tr class="even">
+<td align="left">Arizona State</td>
+<td align="left">Luther Rice College &amp; Seminary</td>
+<td align="right">24</td>
+<td align="right">24</td>
+<td align="right">24</td>
+<td align="right">Inf</td>
+<td align="right">31</td>
+<td align="right">25</td>
+<td align="right">0.4564172</td>
+<td align="right">0.5000000</td>
+<td align="right">0.5522589</td>
+<td align="right">1</td>
+</tr>
+<tr class="odd">
+<td align="left">Arizona State</td>
+<td align="left">State College of Florida-Manatee-Sarasota</td>
+<td align="right">33</td>
+<td align="right">33</td>
+<td align="right">33</td>
+<td align="right">Inf</td>
+<td align="right">38</td>
+<td align="right">30</td>
+<td align="right">0.1476006</td>
+<td align="right">0.4705882</td>
+<td align="right">0.4466996</td>
+<td align="right">1</td>
+</tr>
+</tbody>
+</table>
+<p>Now we can filter the data based on the best matches. This is still somewhat of a manual process but the fuzzy text matching is infinitely better than manually matching the strings.</p>
+<pre class="r"><code># filter data based on exact matches and results for close matches
+text_matches_for_review &lt;- fuzzy_text_res %&gt;% 
+  filter(jw &lt; 0.20) %&gt;% 
+  mutate(correct_match = 1) %&gt;% # add column for user to manually update with 0 if the match is no good
+  edit()</code></pre>
+<pre class="r"><code>#this is an iterative process where you can add the correct matches to a final match data table until all schools are matched
+fuzzy_text_match_final &lt;- text_matches_for_review %&gt;% 
+  filter(correct_match == 1) %&gt;% 
+  select(football_name, school_name)</code></pre>
+<p>I also concatenated “university of” to the football school names to see if that improved the text matching for the remaining unmatched schools.</p>
+<pre class="r"><code>fuzzy_text_conc_before &lt;- fuzzy_text_matching(school_data_transform, football_data_transform, &quot;university of&quot;, &quot;before&quot;)
+# remove the results that have already been matched
+fuzzy_text_conc_before &lt;- fuzzy_text_conc_before %&gt;% 
+  anti_join(fuzzy_text_match_final, by = &quot;football_name&quot;)
+
+fuzzy_text_conc_before_review &lt;- fuzzy_text_conc_before %&gt;% 
+  filter(jw &lt; 0.10) %&gt;% 
+  mutate(correct_match = 1) %&gt;%
+  edit()</code></pre>
+<pre class="r"><code>#this is an iterative process where you can add the correct matches to a final match data table until all schools are matched
+fuzzy_text_match_final &lt;- fuzzy_text_conc_before_review %&gt;% 
+  filter(correct_match == 1) %&gt;% 
+  select(football_name, school_name) %&gt;% 
+  bind_rows(fuzzy_text_match_final)</code></pre>
+<p>All in all, this process does require iteration, filtering, and manual review. In the end, I was able to match 84% of the school names using the output from the fuzzy text matching. The school names that were difficult to match were ones like penn state = pennsylvania state university-main campus or ucla = university of california-los angeles. Eventually I got a final table that matches each of the football school names with the school names from the school data.</p>
+<table>
+<caption><span id="tab:final-fuzzy-matches">Table 7: </span>Final School Name Lookup Table</caption>
+<thead>
+<tr class="header">
+<th align="left">football_name</th>
+<th align="left">school_name</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Boston College</td>
+<td align="left">Boston College</td>
+</tr>
+<tr class="even">
+<td align="left">Virginia Military Institute</td>
+<td align="left">Virginia Military Institute</td>
+</tr>
+<tr class="odd">
+<td align="left">Abilene Christian</td>
+<td align="left">Abilene Christian University</td>
+</tr>
+<tr class="even">
+<td align="left">Alabama A&amp;M</td>
+<td align="left">Alabama A &amp; M University</td>
+</tr>
+<tr class="odd">
+<td align="left">Alabama State</td>
+<td align="left">Alabama State University</td>
+</tr>
+</tbody>
+</table>
+<p>During this fuzzy text matching process, I found that I was missing the following from the school data: United States Military Academy (Army), United States Naval Academy (Navy), and United States Air Force Academy (Air Force). According to the Scorecard Helpdesk “College Scorecard data are currently limited to institutions that participate in Title-IV federal financial aid programs. As the U.S. service academies do not participate in Title-IV, the data needed for inclusion in Scorecard are unavailable.” So, I made the decision to go directly to <a href="https://nces.ed.gov/ipeds/datacenter/InstitutionList.aspx">The National Center for Education Statistics</a> to get what data I could for these missing schools. I had to export a csv for each year from the website, which is a fairly painful process because the site is a little tricky to figure out. Below, I brought that data into R and transformed it. The different years had different column orders (of course!) in the exported csv files, so that is why I have missing_school_data_1 and missing_school_data_2.</p>
+</div>
+<div id="get-missing-data" class="section level1">
+<h1>Get Missing Data</h1>
+<pre class="r"><code>get_missing_data &lt;- function(file_path, column_names, column_pos) {
+  file_names &lt;- list.files(path = file_path, pattern = &quot;*\\.csv&quot;, full.names = TRUE)
+  # Merge all school data files
+  combined_data &lt;- file_names %&gt;% 
+    map_dfr(~ fread(.x, skip = 1, header = FALSE, select = column_pos, col.names = column_names), .id = &quot;index&quot;) %&gt;% 
+    as_tibble() %&gt;%
+    mutate_at(vars(index), as.integer) %&gt;% 
+    mutate(file = basename(file_names[index]))
+  return(combined_data)
+}</code></pre>
+<pre class="r"><code>missing_school_data_1 &lt;- get_missing_data(&quot;~/Documents/DataProjects/football_schools/school_data/column_order1&quot;, 
+                                          c(&quot;school_id&quot;, 
+                                            &quot;school_name&quot;,
+                                            &quot;school_alias&quot;,
+                                            &quot;school_city&quot;,
+                                            &quot;zip&quot;,
+                                            &quot;school_st_abbr&quot;,
+                                            &quot;school_url&quot;,
+                                            &quot;school_longitude&quot;,
+                                            &quot;school_latitude&quot;,
+                                            &quot;region&quot;,
+                                            &quot;level&quot;,
+                                            &quot;control&quot;,
+                                            &quot;size_category&quot;,
+                                            &quot;school_graduation_rate_6yrs&quot;,
+                                            &quot;SAT_reading_25th_percentile&quot;, 
+                                            &quot;SAT_reading_75th_percentile&quot;,
+                                            &quot;SAT_math_25th_percentile&quot;,
+                                            &quot;SAT_math_75th_percentile&quot;,
+                                            &quot;ACT_composite_25th_percentile&quot;,
+                                            &quot;ACT_composite_75th_percentile&quot;,
+                                            &quot;ACT_english_25th_percentile&quot;,
+                                            &quot;ACT_english_75th_percentile&quot;,
+                                            &quot;ACT_math_25th_percentile&quot;,
+                                            &quot;ACT_math_75th_percentile&quot;,
+                                            &quot;school_admission_rate&quot;,
+                                            &quot;school_retention_rate&quot;), c(1:6, 8:11, 13:15, 22, 25:34, 37:38))
+
+missing_school_data_2 &lt;- get_missing_data(&quot;~/Documents/DataProjects/football_schools/school_data/column_order2&quot;, 
+                                          c(&quot;school_id&quot;,
+                                            &quot;school_name&quot;,
+                                            &quot;school_alias&quot;,
+                                            &quot;school_city&quot;,
+                                            &quot;zip&quot;,
+                                            &quot;school_st_abbr&quot;,
+                                            &quot;school_url&quot;,
+                                            &quot;school_longitude&quot;,
+                                            &quot;school_latitude&quot;,
+                                            &quot;region&quot;,
+                                            &quot;level&quot;,
+                                            &quot;control&quot;,
+                                            &quot;size_category&quot;,
+                                            &quot;school_graduation_rate_6yrs&quot;,
+                                            &quot;school_admission_rate&quot;,
+                                            &quot;school_retention_rate&quot;,
+                                            &quot;SAT_reading_25th_percentile&quot;, 
+                                            &quot;SAT_reading_75th_percentile&quot;,
+                                            &quot;SAT_math_25th_percentile&quot;,
+                                            &quot;SAT_math_75th_percentile&quot;,
+                                            &quot;ACT_composite_25th_percentile&quot;,
+                                            &quot;ACT_composite_75th_percentile&quot;,
+                                            &quot;ACT_english_25th_percentile&quot;,
+                                            &quot;ACT_english_75th_percentile&quot;,
+                                            &quot;ACT_math_25th_percentile&quot;,
+                                            &quot;ACT_math_75th_percentile&quot;), c(1:6, 8:11, 13:15, 22, 27:28, 32:41))</code></pre>
+<pre class="r"><code>clean_missing_data &lt;- function(missing1, missing2) {
+  clean_data &lt;- missing1 %&gt;% 
+    bind_rows(missing2) %&gt;% 
+    filter(school_id %in% c(197036, 128328, 164155)) %&gt;% 
+    mutate(school_zip = str_sub(zip, end = 5),
+           school_region = recode(region,&quot;0&quot; = &quot;US Service school&quot;),  
+           school_level = recode(level,&quot;1&quot; = &quot;4-year&quot;),
+           school_control = recode(control,&quot;1&quot; = &quot;Public&quot;),
+           school_size_category = recode(size_category,&quot;2&quot; = &quot;1,000 - 4,999&quot;),  
+           school_state = recode(school_st_abbr, 
+                                 &quot;CO&quot; = &quot;Colorado&quot;, 
+                                 &quot;NY&quot; = &quot;New York&quot;, 
+                                 &quot;MD&quot; = &quot;Maryland&quot;),
+           school_year_start = str_sub(file, end = 4),
+           school_main_campus_flag = 1) %&gt;% 
+    mutate_at(vars(school_graduation_rate_6yrs, school_admission_rate, school_retention_rate), funs(. / 100)) %&gt;% 
+    mutate_at(vars(school_year_start), as.integer) %&gt;% 
+    select(-index, -file, -zip, -region, -level, -control, -size_category)
+                        
+  return(clean_data)
+}</code></pre>
+<pre class="r"><code>missing_school_data &lt;- clean_missing_data(missing_school_data_1, missing_school_data_2)</code></pre>
+</div>
+<div id="creating-tables-in-the-data-warehouse" class="section level1">
+<h1>Creating Tables in the Data Warehouse</h1>
+<p>From the data model, I want to create the tables in my data warehouse on AWS. To do this I first connect to my database in MySQL Workbench. Then select Database &gt; Forward Engineer. The wizard guides you through the process and generates the necessary SQL to create the database and tables. You could also do this in R, but since I did the modeling in MySQL Workbench it is easy to hit a few buttons to create the tables using the GUI.</p>
+<p>Now that my tables are created, I want to load the clean data into my data warehouse. First step is to connect to my database in R. I put my username, password, and host information into a .Renviron file so I could access it without putting it my code.</p>
+<pre class="r"><code>con &lt;- dbConnect(MySQL(),
+                 user = Sys.getenv(&quot;RDSuser&quot;),
+                 password = Sys.getenv(&quot;RDSpw&quot;),
+                 host = Sys.getenv(&quot;RDShost&quot;),
+                 dbname = &#39;FootballSchoolDW&#39;)</code></pre>
+<div id="dimschool" class="section level2">
+<h2>dimSchool</h2>
+<p>Now that I have a connection to the database. I can write the data to it. I could setup the dimSchool table as a type 2 slowly changing dimension, but I decided that I did not need a history of the changes from 2011 to 2015. I found that the changes from one year to the next were minor. Thus, I setup the dimSchool dimension as a type I slowly changing dimension. As a result, you’ll notice that I’m only including the school information from the latest school year that I have, which is 2015.</p>
+<pre class="r"><code># filter for only 2015 data and only columns needed for dimSchool
+dimSchool &lt;- school_data_transform %&gt;%
+  semi_join(fuzzy_text_final, by = &quot;school_name&quot;) %&gt;% 
+  bind_rows(missing_school_data) %&gt;% 
+  filter(school_year_start %in% max(school_year_start)) %&gt;%
+  select(school_id,
+         school_name,
+         school_alias,
+         school_city,
+         school_st_abbr,
+         school_state,
+         school_zip,
+         school_region,
+         school_longitude,
+         school_latitude,
+         school_main_campus_flag,
+         school_size_category,
+         school_url,
+         school_control,
+         school_level)</code></pre>
+<table>
+<caption><span id="tab:show-dimSchool">Table 8: </span>dimSchool</caption>
+<thead>
+<tr class="header">
+<th align="right">school_id</th>
+<th align="left">school_name</th>
+<th align="left">school_alias</th>
+<th align="left">school_city</th>
+<th align="left">school_st_abbr</th>
+<th align="left">school_state</th>
+<th align="left">school_zip</th>
+<th align="left">school_region</th>
+<th align="right">school_longitude</th>
+<th align="right">school_latitude</th>
+<th align="right">school_main_campus_flag</th>
+<th align="left">school_size_category</th>
+<th align="left">school_url</th>
+<th align="left">school_control</th>
+<th align="left">school_level</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">137351</td>
+<td align="left">University of South Florida-Main Campus</td>
+<td align="left">USF Main Campus |USF Tampa Campus |USF Tampa |USF</td>
+<td align="left">Tampa</td>
+<td align="left">FL</td>
+<td align="left">Florida</td>
+<td align="left">33620</td>
+<td align="left">Southeast</td>
+<td align="right">-82.41588</td>
+<td align="right">28.05665</td>
+<td align="right">1</td>
+<td align="left">20,000 and above</td>
+<td align="left">www.usf.edu</td>
+<td align="left">Public</td>
+<td align="left">4-year</td>
+</tr>
+<tr class="even">
+<td align="right">130934</td>
+<td align="left">Delaware State University</td>
+<td align="left">NA</td>
+<td align="left">Dover</td>
+<td align="left">DE</td>
+<td align="left">Delaware</td>
+<td align="left">19901</td>
+<td align="left">Mid East</td>
+<td align="right">-75.54053</td>
+<td align="right">39.18717</td>
+<td align="right">1</td>
+<td align="left">1,000 - 4,999</td>
+<td align="left">www.desu.edu</td>
+<td align="left">Public</td>
+<td align="left">4-year</td>
+</tr>
+<tr class="odd">
+<td align="right">139940</td>
+<td align="left">Georgia State University</td>
+<td align="left">NA</td>
+<td align="left">Atlanta</td>
+<td align="left">GA</td>
+<td align="left">Georgia</td>
+<td align="left">30303</td>
+<td align="left">Southeast</td>
+<td align="right">-84.38667</td>
+<td align="right">33.75270</td>
+<td align="right">1</td>
+<td align="left">20,000 and above</td>
+<td align="left">www.gsu.edu</td>
+<td align="left">Public</td>
+<td align="left">4-year</td>
+</tr>
+<tr class="even">
+<td align="right">145637</td>
+<td align="left">University of Illinois at Urbana-Champaign</td>
+<td align="left">Illinois|Illinios|Ilinois|Ilinios|Urbana|Champaign|Champagne|Champaign-Urbana|Champagne-Urbana|Urbana-Champaign|Urbana-Champagne|University of Illinois at Urbana|University of Illinois at Champaign|University of Illinois at Champagne|University of Illinois at Champaign-Urbana|University of Illinois at Champagne-Urbana|UIUC|UICU|University of Illinois at UC|University of Illinois at CU</td>
+<td align="left">Champaign</td>
+<td align="left">IL</td>
+<td align="left">Illinois</td>
+<td align="left">61820</td>
+<td align="left">Great Lakes</td>
+<td align="right">-88.23031</td>
+<td align="right">40.10886</td>
+<td align="right">1</td>
+<td align="left">20,000 and above</td>
+<td align="left">www.illinois.edu/</td>
+<td align="left">Public</td>
+<td align="left">4-year</td>
+</tr>
+<tr class="odd">
+<td align="right">126614</td>
+<td align="left">University of Colorado Boulder</td>
+<td align="left">U of Colorado|Univ of Colorado|University of Colorado|U of CO|Univ of CO|University of CO|Boulder|CU|CU-Boulder|UCB|CUB|Colorado|Colorado University|U of Colo|Univ of Colo|University of Colo|Colo|Buffs|Buffalos|Buffaloes|CU at Boulder|Golden Buffs|University of Colorado at Boulder</td>
+<td align="left">Boulder</td>
+<td align="left">CO</td>
+<td align="left">Colorado</td>
+<td align="left">80309</td>
+<td align="left">Rocky Mountains</td>
+<td align="right">-105.26706</td>
+<td align="right">40.00442</td>
+<td align="right">1</td>
+<td align="left">20,000 and above</td>
+<td align="left">www.colorado.edu</td>
+<td align="left">Public</td>
+<td align="left">4-year</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>dbWriteTable(con, name = &quot;dimSchool&quot;, value = dimSchool , append = TRUE, row.names = FALSE)</code></pre>
+</div>
+<div id="dimdate-and-dimschoolyear" class="section level2">
+<h2>dimDate and dimSchoolYear</h2>
+<p>Before I can load the fact tables, I need to create the dimDate and dimSchoolYear tables and load them into the data warehouse.</p>
+<pre class="r"><code>create_date_table &lt;- function(start_year) {
+  d &lt;- tibble(date_value = seq(mdy(paste0(&quot;01/01/&quot;, start_year)), by = &quot;day&quot;, length.out = 6940),
+              date_sk = as.integer(format(date_value, format = &quot;%Y%m%d&quot;)),
+              school_year_sk = if_else(month(date_value) %in% c(1, 2, 3, 4, 5, 6, 7), as.integer(year(date_value) - 1), as.integer(year(date_value))),
+              month_value = month(date_value),
+              day_value = day(date_value),
+              year_value = year(date_value),
+              day_of_week_value = wday(date_value),
+              day_of_week_name = wday(date_value, label = TRUE, abbr = FALSE),
+              month_name = month(date_value, label = TRUE, abbr = FALSE)) %&gt;% 
+               select(date_sk, school_year_sk, everything())
+  return(d)
+}</code></pre>
+<pre class="r"><code>dimDate &lt;- create_date_table(2011)</code></pre>
+<table>
+<caption><span id="tab:show-dimDate">Table 9: </span>dimDate</caption>
+<thead>
+<tr class="header">
+<th align="right">date_sk</th>
+<th align="right">school_year_sk</th>
+<th align="left">date_value</th>
+<th align="right">month_value</th>
+<th align="right">day_value</th>
+<th align="right">year_value</th>
+<th align="right">day_of_week_value</th>
+<th align="left">day_of_week_name</th>
+<th align="left">month_name</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">20110101</td>
+<td align="right">2010</td>
+<td align="left">2011-01-01</td>
+<td align="right">1</td>
+<td align="right">1</td>
+<td align="right">2011</td>
+<td align="right">7</td>
+<td align="left">Saturday</td>
+<td align="left">January</td>
+</tr>
+<tr class="even">
+<td align="right">20110102</td>
+<td align="right">2010</td>
+<td align="left">2011-01-02</td>
+<td align="right">1</td>
+<td align="right">2</td>
+<td align="right">2011</td>
+<td align="right">1</td>
+<td align="left">Sunday</td>
+<td align="left">January</td>
+</tr>
+<tr class="odd">
+<td align="right">20110103</td>
+<td align="right">2010</td>
+<td align="left">2011-01-03</td>
+<td align="right">1</td>
+<td align="right">3</td>
+<td align="right">2011</td>
+<td align="right">2</td>
+<td align="left">Monday</td>
+<td align="left">January</td>
+</tr>
+<tr class="even">
+<td align="right">20110104</td>
+<td align="right">2010</td>
+<td align="left">2011-01-04</td>
+<td align="right">1</td>
+<td align="right">4</td>
+<td align="right">2011</td>
+<td align="right">3</td>
+<td align="left">Tuesday</td>
+<td align="left">January</td>
+</tr>
+<tr class="odd">
+<td align="right">20110105</td>
+<td align="right">2010</td>
+<td align="left">2011-01-05</td>
+<td align="right">1</td>
+<td align="right">5</td>
+<td align="right">2011</td>
+<td align="right">4</td>
+<td align="left">Wednesday</td>
+<td align="left">January</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>dbWriteTable(conn = con, name = &#39;dimDate&#39;, value = dimDate, append = TRUE, row.names = FALSE)</code></pre>
+<pre class="r"><code>create_school_year &lt;- function(dates) {
+  # x should be dimDate or equivalent
+  s &lt;- dates %&gt;% 
+    mutate(school_year_value = school_year_sk) %&gt;% 
+    select(school_year_sk, school_year_value) %&gt;% 
+    distinct()
+  return(s)
+}</code></pre>
+<pre class="r"><code>dimSchoolYear &lt;- create_school_year(dimDate)</code></pre>
+<table>
+<caption><span id="tab:show-dimSchoolYear">Table 10: </span>dimSchoolYear</caption>
+<thead>
+<tr class="header">
+<th align="right">school_year_sk</th>
+<th align="right">school_year_value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">2010</td>
+<td align="right">2010</td>
+</tr>
+<tr class="even">
+<td align="right">2011</td>
+<td align="right">2011</td>
+</tr>
+<tr class="odd">
+<td align="right">2012</td>
+<td align="right">2012</td>
+</tr>
+<tr class="even">
+<td align="right">2013</td>
+<td align="right">2013</td>
+</tr>
+<tr class="odd">
+<td align="right">2014</td>
+<td align="right">2014</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>dbWriteTable(conn = con, name = &#39;dimSchoolYear&#39;, value = dimSchoolYear, append = TRUE, row.names = FALSE)</code></pre>
+</div>
+<div id="factgame" class="section level2">
+<h2>factGame</h2>
+<p>In the game source data, one row represents two schools, both a winner and loser. In the data warehouse I want to represent a game from each schools’ perspective. Therefore, I loaded two rows for each game and defined the school columns in the table as ‘school’ and ‘opponent.’ This allowed me to load both the winner and the loser into the same column on two different rows. For analysis, this permitted me to obtain data for both winners and losers by querying just one column, either ‘school’ or ‘opponent’.</p>
+<pre class="r"><code>create_factGame &lt;- function(football, dates, text_match) {
+  # football should be clean, transformed football data
+  # dates should be the dimDate table or equivalent
+  # text_match should be the final fuzzy text matching data
+  # get SKs
+  school_opponent_sks &lt;- dbGetQuery(con, &quot;SELECT school_sk, school_name
+                                    FROM FootballSchoolDW.dimSchool&quot;)
+  
+  # create unique game id by concantenating the school year with the original game number
+  final_football_data &lt;- football %&gt;% 
+    left_join(select(dates, date_value, date_sk, school_year_sk), by = c(&quot;game_date&quot; = &quot;date_value&quot;)) %&gt;%
+    unite(game_id, school_year_sk, game_number, sep = &quot;&quot;) %&gt;%
+    mutate_at(vars(game_id), as.integer) %&gt;% 
+    left_join(text_match, by = c(&quot;school&quot; = &quot;football_name&quot;)) %&gt;% 
+    rename(school_lookup = school_name) %&gt;% 
+    left_join(school_opponent_sks, by = c(&quot;school_lookup&quot; = &quot;school_name&quot;)) %&gt;% 
+    left_join(text_match, by = c(&quot;opponent&quot; = &quot;football_name&quot;)) %&gt;% 
+    rename(opponent_lookup = school_name) %&gt;% 
+    left_join(school_opponent_sks, by = c(&quot;opponent_lookup&quot; = &quot;school_name&quot;)) %&gt;% 
+    rename(school_sk = school_sk.x, opponent_sk = school_sk.y) 
+                          
+  if (any(is.na(final_football_data$school_sk))) { 
+    warning(&quot;Some school SKs are NA. Check before loading data into database.&quot;, call. = FALSE)
+  }
+  if (any(is.na(final_football_data$opponent_sk))) { 
+    warning(&quot;Some opponent SKs are NA. Check before loading data into database.&quot;, call. = FALSE)
+  }
+
+  winner &lt;- final_football_data %&gt;% 
+    select(school_sk,
+           opponent_sk,
+           date_sk,
+           game_id,
+           school_points,
+           opponent_points,
+           school_win,
+           football_notes,
+           school_rank,
+           opponent_rank,
+           school_game_site,
+           opponent_game_site,
+           bowl, 
+           bowl_flag,
+           national_championship_flag)
+    
+  loser &lt;- final_football_data %&gt;%
+    select(opponent_sk,
+           school_sk,
+           date_sk,
+           game_id,
+           opponent_points,
+           school_points,
+           opponent_win,
+           football_notes,
+           opponent_rank,
+           school_rank,
+           opponent_game_site,
+           school_game_site,
+           bowl,
+           bowl_flag,
+           national_championship_flag)
+  
+  # I intentionally want to bind these two tibbles together by the column orders specified above so I get a row for the school and a row for the opponent in the final table
+  final_football_ordered &lt;- rbindlist(list(winner, loser)) %&gt;% 
+    as_tibble() %&gt;% 
+    arrange(game_id)
+  return(final_football_ordered)
+}</code></pre>
+<pre class="r"><code>factGame &lt;- create_factGame(football_data_transform, dimDate, fuzzy_text_final)</code></pre>
+<table>
+<caption><span id="tab:show-factGame">Table 11: </span>factGame</caption>
+<thead>
+<tr class="header">
+<th align="right">school_sk</th>
+<th align="right">opponent_sk</th>
+<th align="right">date_sk</th>
+<th align="right">game_id</th>
+<th align="right">school_points</th>
+<th align="right">opponent_points</th>
+<th align="right">school_win</th>
+<th align="left">football_notes</th>
+<th align="right">school_rank</th>
+<th align="right">opponent_rank</th>
+<th align="left">school_game_site</th>
+<th align="left">opponent_game_site</th>
+<th align="left">bowl</th>
+<th align="right">bowl_flag</th>
+<th align="right">national_championship_flag</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">221</td>
+<td align="right">106</td>
+<td align="right">20110901</td>
+<td align="right">20111</td>
+<td align="right">48</td>
+<td align="right">14</td>
+<td align="right">1</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">home</td>
+<td align="left">away</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">106</td>
+<td align="right">221</td>
+<td align="right">20110901</td>
+<td align="right">20111</td>
+<td align="right">14</td>
+<td align="right">48</td>
+<td align="right">0</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">away</td>
+<td align="left">home</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="right">30</td>
+<td align="right">17</td>
+<td align="right">20110901</td>
+<td align="right">20112</td>
+<td align="right">32</td>
+<td align="right">15</td>
+<td align="right">1</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">away</td>
+<td align="left">home</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="even">
+<td align="right">17</td>
+<td align="right">30</td>
+<td align="right">20110901</td>
+<td align="right">20112</td>
+<td align="right">15</td>
+<td align="right">32</td>
+<td align="right">0</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">home</td>
+<td align="left">away</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+<tr class="odd">
+<td align="right">23</td>
+<td align="right">49</td>
+<td align="right">20110901</td>
+<td align="right">20113</td>
+<td align="right">21</td>
+<td align="right">6</td>
+<td align="right">1</td>
+<td align="left">NA</td>
+<td align="right">NA</td>
+<td align="right">NA</td>
+<td align="left">home</td>
+<td align="left">away</td>
+<td align="left">NA</td>
+<td align="right">0</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>dbWriteTable(conn = con, name = &#39;factGame&#39;, value = factGame, append = TRUE, row.names = FALSE)</code></pre>
+</div>
+<div id="factschool" class="section level2">
+<h2>factSchool</h2>
+<p>Finally, the factSchool table was loaded. The school_year was obtained from the snowflaked dimSchoolYear table, the school_sk was obtained from the dimSchool table.</p>
+<pre class="r"><code>create_factSchool &lt;- function(school, missing_data, school_year, text_match) {
+  # school should be clean, transformed school data
+  # missing_data is the missing school data
+  # school_year should be the dimSchoolYear table or equivalent
+  # text_match should be the final fuzzy text matching data
+  # get SKs
+  school_sks &lt;- dbGetQuery(con, &quot;SELECT school_sk, school_name 
+                           FROM FootballSchoolDW.dimSchool&quot;)
+  
+  final_school_data &lt;- school %&gt;%
+    semi_join(text_match, by = &quot;school_name&quot;) %&gt;% 
+    bind_rows(missing_data) %&gt;% 
+    left_join(school_sks, by = &quot;school_name&quot;) %&gt;% 
+    left_join(school_year, by = c(&quot;school_year_start&quot; = &quot;school_year_value&quot;)) %&gt;%
+    select(school_sk, 
+           school_year_sk, 
+           school_admission_rate, 
+           school_in_state_price,
+           school_out_state_price,
+           school_retention_rate,
+           school_graduation_rate_4yrs,
+           school_graduation_rate_6yrs,
+           school_federal_loan_rate,
+           school_students_with_any_loan,
+           school_median_debt_graduates,
+           school_median_debt_graduates_monthly_payments,
+           SAT_reading_25th_percentile, 
+           SAT_reading_75th_percentile,
+           SAT_math_25th_percentile,
+           SAT_math_75th_percentile,
+           SAT_reading_midpoint,
+           SAT_math_midpoint,
+           ACT_composite_25th_percentile,
+           ACT_composite_75th_percentile,
+           ACT_english_25th_percentile,
+           ACT_english_75th_percentile,
+           ACT_math_25th_percentile,
+           ACT_math_75th_percentile,
+           ACT_composite_midpoint,
+           ACT_english_midpoint,
+           ACT_math_midpoint)
+  
+  if (any(is.na(final_school_data$school_sk))) { 
+    warning(&quot;Some school SKs are NA. Check before loading data into database.&quot;, call. = FALSE)
+  }
+  return(final_school_data)
+}</code></pre>
+<pre class="r"><code>factSchool &lt;- create_factSchool(school_data_transform, missing_school_data, dimSchoolYear, fuzzy_text_final)</code></pre>
+<table>
+<caption><span id="tab:show-factSchool">Table 12: </span>factSchool</caption>
+<thead>
+<tr class="header">
+<th align="right">school_sk</th>
+<th align="right">school_year_sk</th>
+<th align="right">school_admission_rate</th>
+<th align="right">school_in_state_price</th>
+<th align="right">school_out_state_price</th>
+<th align="right">school_retention_rate</th>
+<th align="right">school_graduation_rate_4yrs</th>
+<th align="right">school_graduation_rate_6yrs</th>
+<th align="right">school_federal_loan_rate</th>
+<th align="right">school_students_with_any_loan</th>
+<th align="right">school_median_debt_graduates</th>
+<th align="right">school_median_debt_graduates_monthly_payments</th>
+<th align="right">SAT_reading_25th_percentile</th>
+<th align="right">SAT_reading_75th_percentile</th>
+<th align="right">SAT_math_25th_percentile</th>
+<th align="right">SAT_math_75th_percentile</th>
+<th align="right">SAT_reading_midpoint</th>
+<th align="right">SAT_math_midpoint</th>
+<th align="right">ACT_composite_25th_percentile</th>
+<th align="right">ACT_composite_75th_percentile</th>
+<th align="right">ACT_english_25th_percentile</th>
+<th align="right">ACT_english_75th_percentile</th>
+<th align="right">ACT_math_25th_percentile</th>
+<th align="right">ACT_math_75th_percentile</th>
+<th align="right">ACT_composite_midpoint</th>
+<th align="right">ACT_english_midpoint</th>
+<th align="right">ACT_math_midpoint</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right">7</td>
+<td align="right">2011</td>
+<td align="right">0.3805</td>
+<td align="right">5800</td>
+<td align="right">14990</td>
+<td align="right">0.8752</td>
+<td align="right">0.2488538</td>
+<td align="right">0.5171</td>
+<td align="right">0.4489</td>
+<td align="right">0.8158580</td>
+<td align="right">17500.0</td>
+<td align="right">NA</td>
+<td align="right">520</td>
+<td align="right">620</td>
+<td align="right">540</td>
+<td align="right">630</td>
+<td align="right">570</td>
+<td align="right">585</td>
+<td align="right">23</td>
+<td align="right">27</td>
+<td align="right">22</td>
+<td align="right">28</td>
+<td align="right">23</td>
+<td align="right">27</td>
+<td align="right">25</td>
+<td align="right">25</td>
+<td align="right">25</td>
+</tr>
+<tr class="even">
+<td align="right">8</td>
+<td align="right">2011</td>
+<td align="right">0.4265</td>
+<td align="right">7056</td>
+<td align="right">15052</td>
+<td align="right">0.7046</td>
+<td align="right">0.1853107</td>
+<td align="right">0.3458</td>
+<td align="right">0.7559</td>
+<td align="right">0.9596323</td>
+<td align="right">28438.5</td>
+<td align="right">NA</td>
+<td align="right">400</td>
+<td align="right">470</td>
+<td align="right">400</td>
+<td align="right">470</td>
+<td align="right">435</td>
+<td align="right">435</td>
+<td align="right">16</td>
+<td align="right">20</td>
+<td align="right">15</td>
+<td align="right">20</td>
+<td align="right">16</td>
+<td align="right">19</td>
+<td align="right">18</td>
+<td align="right">18</td>
+<td align="right">18</td>
+</tr>
+<tr class="odd">
+<td align="right">9</td>
+<td align="right">2011</td>
+<td align="right">0.5183</td>
+<td align="right">9410</td>
+<td align="right">27620</td>
+<td align="right">0.8314</td>
+<td align="right">0.1754839</td>
+<td align="right">0.4731</td>
+<td align="right">0.5446</td>
+<td align="right">0.6536679</td>
+<td align="right">18739.5</td>
+<td align="right">NA</td>
+<td align="right">500</td>
+<td align="right">590</td>
+<td align="right">500</td>
+<td align="right">600</td>
+<td align="right">545</td>
+<td align="right">550</td>
+<td align="right">21</td>
+<td align="right">26</td>
+<td align="right">21</td>
+<td align="right">26</td>
+<td align="right">20</td>
+<td align="right">26</td>
+<td align="right">24</td>
+<td align="right">24</td>
+<td align="right">23</td>
+</tr>
+<tr class="even">
+<td align="right">16</td>
+<td align="right">2011</td>
+<td align="right">0.6759</td>
+<td align="right">13838</td>
+<td align="right">27980</td>
+<td align="right">0.9275</td>
+<td align="right">0.6605480</td>
+<td align="right">0.8243</td>
+<td align="right">0.4289</td>
+<td align="right">0.9348945</td>
+<td align="right">19125.0</td>
+<td align="right">NA</td>
+<td align="right">540</td>
+<td align="right">660</td>
+<td align="right">690</td>
+<td align="right">780</td>
+<td align="right">600</td>
+<td align="right">735</td>
+<td align="right">26</td>
+<td align="right">31</td>
+<td align="right">26</td>
+<td align="right">32</td>
+<td align="right">26</td>
+<td align="right">33</td>
+<td align="right">29</td>
+<td align="right">29</td>
+<td align="right">30</td>
+</tr>
+<tr class="odd">
+<td align="right">6</td>
+<td align="right">2011</td>
+<td align="right">0.8694</td>
+<td align="right">9152</td>
+<td align="right">30330</td>
+<td align="right">0.8380</td>
+<td align="right">0.4008388</td>
+<td align="right">0.6814</td>
+<td align="right">0.3470</td>
+<td align="right">0.9125573</td>
+<td align="right">17998.0</td>
+<td align="right">NA</td>
+<td align="right">520</td>
+<td align="right">630</td>
+<td align="right">540</td>
+<td align="right">650</td>
+<td align="right">575</td>
+<td align="right">595</td>
+<td align="right">24</td>
+<td align="right">28</td>
+<td align="right">23</td>
+<td align="right">29</td>
+<td align="right">23</td>
+<td align="right">29</td>
+<td align="right">26</td>
+<td align="right">26</td>
+<td align="right">26</td>
+</tr>
+</tbody>
+</table>
+<pre class="r"><code>dbWriteTable(conn = con, name = &#39;factSchool&#39;, value = factSchool, append = TRUE, row.names = FALSE)</code></pre>
+</div>
+<div id="create-view-in-sql" class="section level2">
+<h2>Create View in SQL</h2>
+<p>Now that all of the data is loaded into the database, I’m going to create a view using SQL that will be used for the analysis/data visualization work. If the dataset were larger, I would consider creating a materialized view, but for this amount of data a regular view will work fine.</p>
+<pre class="sql"><code>CREATE VIEW viewAnalysis AS 
+SELECT
+  ds.school_id,
+    ds.school_name,
+    ds.school_city,
+    ds.school_st_abbr,
+    ds.school_state,
+    ds.school_zip,
+    ds.school_region,
+    ds.school_longitude,
+    ds.school_latitude,
+    ds.school_main_campus_flag,
+    ds.school_size_category,
+    ds.school_url,
+    ds.school_control,
+    ds.school_level,
+    fs.school_admission_rate,
+    fs.school_in_state_price,
+    fs.school_out_state_price,
+    fs.school_retention_rate,
+    fs.school_graduation_rate_4yrs,
+    fs.school_graduation_rate_6yrs,
+    fs.school_federal_loan_rate,
+    fs.school_students_with_any_loan,
+    fs.school_median_debt_graduates,
+    fs.school_median_debt_graduates_monthly_payments,
+    fs.SAT_reading_25th_percentile,
+    fs.SAT_reading_75th_percentile,
+    fs.SAT_math_25th_percentile,
+    fs.SAT_math_75th_percentile,
+    fs.SAT_reading_midpoint,
+    fs.SAT_math_midpoint,
+    fs.ACT_composite_25th_percentile,
+    fs.ACT_composite_75th_percentile,
+    fs.ACT_english_25th_percentile,
+    fs.ACT_english_75th_percentile,
+    fs.ACT_math_25th_percentile,
+    fs.ACT_math_75th_percentile,
+    fs.ACT_composite_midpoint,
+    fs.ACT_english_midpoint,
+    fs.ACT_math_midpoint,
+    sy.school_year_value,
+    SUM(fg.school_points) AS school_points,
+    SUM(fg.opponent_points) AS opponent_points,
+    SUM(fg.school_win) AS school_wins,
+    MIN(fg.school_rank) AS min_school_rank,
+    MIN(fg.opponent_rank) AS min_opponent_rank,
+    SUM(fg.bowl_flag) AS bowl_games,
+  SUM(CASE WHEN (fg.bowl_flag = 1 AND fg.school_win = 1)
+          THEN 1
+      ELSE 0
+      END) AS bowl_wins,
+    SUM(fg.national_championship_flag) AS national_championship_games,
+    SUM(CASE WHEN (fg.national_championship_flag = 1 AND fg.school_win = 1)
+          THEN 1
+      ELSE 0
+      END) AS national_championship_wins,
+    SUM(CASE WHEN (fg.school_game_site = &#39;home&#39; AND fg.school_win = 1)
+          THEN 1
+          ELSE 0
+          END) AS home_wins, 
+    SUM(CASE WHEN (fg.school_game_site = &#39;home&#39; AND fg.school_win = 0)
+          THEN 1
+          ELSE 0
+          END) AS home_loses,
+    SUM(CASE WHEN (fg.school_game_site = &#39;home&#39;)
+          THEN 1
+          ELSE 0
+          END) AS home_games,
+    SUM(CASE WHEN ((fg.school_game_site = &#39;away&#39; OR fg.school_game_site = &#39;neutral&#39; ) AND fg.school_win = 1)
+          THEN 1
+          ELSE 0
+          END) AS road_wins,
+    SUM(CASE WHEN ((fg.school_game_site = &#39;away&#39; OR fg.school_game_site = &#39;neutral&#39; ) AND  fg.school_win = 0)
+          THEN 1
+          ELSE 0
+          END) AS road_loses,
+    SUM(CASE WHEN (fg.school_game_site = &#39;away&#39; OR fg.school_game_site = &#39;neutral&#39; )
+          THEN 1
+          ELSE 0
+          END) AS road_games,
+    SUM(CASE WHEN (fg.opponent_rank IS NOT NULL AND fg.school_win = 1)
+          THEN 1
+          ELSE 0
+          END) AS wins_against_ranked_opponents,
+    SUM(CASE WHEN (fg.opponent_rank IS NOT NULL AND fg.school_win = 0)
+          THEN 1
+          ELSE 0
+          END) AS loses_against_ranked_opponent,
+    SUM(CASE WHEN (fg.opponent_rank IS NOT NULL)
+          THEN 1
+      ELSE 0
+      END) AS games_against_ranked_opponent,
+    SUM(fg.school_points) - SUM(fg.opponent_points) AS point_differential,
+    COUNT(*) as total_games
+FROM FootballSchoolDW.factGame AS fg
+  INNER JOIN FootballSchoolDW.dimSchool AS ds
+  ON fg.school_sk = ds.school_sk
+  INNER JOIN FootballSchoolDW.dimDate AS dd
+  ON dd.date_sk = fg.date_sk
+  INNER JOIN FootballSchoolDW.dimSchoolYear AS sy
+  ON dd.school_year_sk = sy.school_year_sk
+  INNER JOIN FootballSchoolDW.factSchool AS fs
+  ON fs.school_sk = ds.school_sk and fs.school_year_sk = sy.school_year_sk
+  GROUP BY 
+    ds.school_id,
+    ds.school_name,
+    ds.school_city,
+    ds.school_st_abbr,
+    ds.school_state,
+    ds.school_zip,
+    ds.school_region,
+    ds.school_longitude,
+    ds.school_latitude,
+    ds.school_main_campus_flag,
+    ds.school_size_category,
+    ds.school_url,
+    ds.school_control,
+    ds.school_level,
+    fs.school_admission_rate,
+    fs.school_in_state_price,
+    fs.school_out_state_price,
+    fs.school_retention_rate,
+    fs.school_graduation_rate_4yrs,
+    fs.school_graduation_rate_6yrs,
+    fs.school_federal_loan_rate,
+    fs.school_students_with_any_loan,
+    fs.school_median_debt_graduates,
+    fs.school_median_debt_graduates_monthly_payments,
+    fs.SAT_reading_25th_percentile,
+    fs.SAT_reading_75th_percentile,
+    fs.SAT_math_25th_percentile,
+    fs.SAT_math_75th_percentile,
+    fs.SAT_reading_midpoint,
+    fs.SAT_math_midpoint,
+    fs.ACT_composite_25th_percentile,
+    fs.ACT_composite_75th_percentile,
+    fs.ACT_english_25th_percentile,
+    fs.ACT_english_75th_percentile,
+    fs.ACT_math_25th_percentile,
+    fs.ACT_math_75th_percentile,
+    fs.ACT_composite_midpoint,
+    fs.ACT_english_midpoint,
+    fs.ACT_math_midpoint,
+    sy.school_year_value
+  ORDER BY sy.school_year_value</code></pre>
+<pre class="r"><code># disconnect from RDS
+dbDisconnect(con)</code></pre>
+</div>
+</div>
+<div id="creating-tableau-dashboard" class="section level1">
+<h1>Creating Tableau Dashboard</h1>
+<p>I am going to start by building a dashboard in Tableau. Maybe if I get ambitious, I’ll build something similar in Shiny. I only have Tableau Public, which can’t connect directly to my database (only the paid version of Tableau allows this). So, I’ll export a CSV file from the view I just created and use that as my Tableau data source.</p>
+<p>Users can filter the data based on various fields and then see the corresponding game stats for the filtered list of schools. The user can also select the years they want to view data for and can choose to view the means or medians of the data for the given years selected.</p>
+<p>The Tableau dashboard can be found <a href="https://public.tableau.com/views/football_school_dataviz/SchoolSelectionDashboard?:embed=y&amp;:display_count=yes">here.</a></p>
+</div>
