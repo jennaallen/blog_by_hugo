@@ -50,7 +50,7 @@ ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
   #reddit = "username"
   linkedin = "jenna-d-allen-mba-8bb2293b"
   #xing = "username"
-  stackoverflow = "6669829/jenna-allen?tab=profile"
+  stackoverflow = "/6669829/jenna-allen?tab=profile"
   #snapchat = "username"
   #instagram = "username"
   #youtube = "user/username" # or channel/channelname
