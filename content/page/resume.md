@@ -113,7 +113,7 @@ Remote </h5>
 2015 — 2017
 
 *  Conducted primary research to support or refute various business hypotheses and provided clients with actionable recommendations for improving the customer experience, call center agents’ processes/tools, and customer self-service tools
-*  Successfully identified impactful recommendations for clients across 11 different projects by leveraging my abilities in regular expressions,survey analysis,customer journey mapping, root cause analysis,text mining, and competitive analysis
+*  Successfully identified impactful recommendations for clients across 11 different projects by leveraging my abilities in regular expressions, survey analysis, customer journey mapping, root cause analysis, text mining, and competitive analysis
 *  Regularly presented analytic findings, recommendations, and supporting business cases to clients
 *  Created operational dashboards to monitor the impacts of consulting recommendations and identify trends or issues that warranted further investigation
 *  Wrote high quality R scripts to streamline and automate data collection/reporting and manual data munging tasks
