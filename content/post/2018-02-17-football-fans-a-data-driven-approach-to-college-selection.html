@@ -75,7 +75,7 @@ library(lubridate)</code></pre>
 <h1>Source Data</h1>
 <div id="college-scorecard-school-data" class="section level2">
 <h2>College Scorecard School Data</h2>
-<p>There are two data sources for this project. I am using the available API provided by <a href="https://collegescorecard.ed.gov/data/documentation/">College Scorecard</a> to extract the relevant school data. The College Scorecard combines data from the Integrated Postsecondary Education Data System (IPEDS), National Student Loan Data System (NSLDS), and various other sources into one dataset and makes it available through an API. The extraction process includes selecting the desired data fields (there are a ton to choose from), determining which years to pull data for, and creating the API call to return the data. The latest full dataset available is for the 2015-2016 school year. I will be extracting the last 5 school years worth of data (2011-2012, 2012-2013, 2013-2014, 2014-2015, 2015-2016).</p>
+<p>I am using the available API provided by <a href="https://collegescorecard.ed.gov/data/documentation/">College Scorecard</a> to extract the relevant school data. The College Scorecard combines data from the Integrated Postsecondary Education Data System (IPEDS), National Student Loan Data System (NSLDS), and various other sources into one dataset and makes it available through an API. The extraction process includes selecting the desired data fields (there are a ton to choose from), determining which years to pull data for, and creating the API call to return the data. The latest full dataset available is for the 2015-2016 school year. I will be extracting the last 5 school years worth of data (2011-2012, 2012-2013, 2013-2014, 2014-2015, 2015-2016).</p>
 <p>In R, there is an existing package called <a href="https://cran.r-project.org/web/packages/rscorecard/rscorecard.pdf">rscorecard</a> that “is simply a method for converting idiomatic R code into a properly formatted URL string that is then queried.” This package does require an API key which I requested <a href="https://api.data.gov/signup/">here</a>. I added the API key to a .Renviron file to maintain security <a href="https://db.rstudio.com/best-practices/managing-credentials/">best practices</a>.</p>
 <pre class="r"><code>years &lt;- seq(2011, 2015)</code></pre>
 <pre class="r"><code># get school data for all 4-year schools that are public or private non-profit for desired years and combine it all into one tibble
@@ -363,7 +363,7 @@ school_data_staging &lt;- map_dfr(years, ~
 <p>For the football data, I am going to scrape data from <a href="http://www.sports-reference.com" class="uri">http://www.sports-reference.com</a>, a sports statistics clearinghouse that allows free downloads of data. You can export this data to CSVs, but I’m going to scrape it so I don’t have to deal with multiple CSV files. To mirror the school data, I will be extracting the data for the same school years as mentioned above (2011-2012, 2012-2013, 2013-2014, 2014-2015, 2015-2016). I’ll also be getting data for bowl games. The bowl data is on a separate webpage of the site.</p>
 <pre class="r"><code>get_football_data &lt;- function(games, years) {
   if (!(games %in% c(&quot;schedule&quot;, &quot;bowls&quot;))) {
-    stop(&quot;Argument must be either &#39;schedule&#39; or &#39;bowls&#39;&quot;, call. = FALSE)
+    stop(&quot;Game arg must be either &#39;schedule&#39; or &#39;bowls&#39;&quot;, call. = FALSE)
   }
   # create urls based on the desired years and if user wants all games or bowl games
   urls &lt;- paste0(&quot;https://www.sports-reference.com/cfb/years/&quot;,years,&quot;-&quot;,games,&quot;.html&quot;)
@@ -1099,13 +1099,13 @@ football_data_staging_bowls &lt;- get_football_data(&quot;bowls&quot;, years)</c
 </tr>
 </tbody>
 </table>
-<p>Ok, I have all the school and football data I want and it’s cleaned up. Now, I’m ready to create the data model.</p>
+<p>Now that the school and football data are clean, I’m ready to create the data model.</p>
 </div>
 </div>
 <div id="dimensional-model" class="section level1">
 <h1>Dimensional Model</h1>
 <p>I am going to store this data in MySQL running on AWS RDS. To initially setup an AWS RDS instance, I loosely followed these <a href="http://www.jason-french.com/blog/2014/07/03/using-r-with-mysql-databases/">directions</a>.</p>
-<p>For this project, I’m going to use a star schema. The first step in creating the dimensional data model is profiling the data in order to better understand how the data from the two different sources fits together. During this profiling step, I determined what data types best fit each attribute in both data sets and what sizes to make each data type.</p>
+<p>For this project, I’m going to use a star schema. The first step in creating the dimensional data model is profiling the data in order to better understand how the data from the two different sources fits together. During this profiling step, I determined what data types best fit each variable in both data sets and what sizes to make each data type.</p>
 <pre class="r"><code>school_data_char_length &lt;- school_data_transform %&gt;% 
   map(~ max(nchar(.x), na.rm = TRUE))
 
@@ -1150,13 +1150,13 @@ football_data_transform %&gt;%
 <h1>Fuzzy Text Matching</h1>
 <p>As mentioned previously, the only variable that ties the school data and the football data together is the school name. Thus, in order to be able to join the two data sets together, I need to create a lookup table that contains the school name from the football data and the corresponding school name from the school data. I’ll use fuzzy text matching in R to create this table.</p>
 <p>I created a function to perform the fuzzy text matching. One benefit of this function is that it allows the user to concatenate text either before or after the football school name prior to the fuzzy matching. This is important because several of the school names from the football data are shortened (e.g Arizona instead of The University of Arizona). This concantenation can improve the fuzzy matching in some cases.</p>
-<p>A cross join is used to match up all the football names with all of the school names so each combination can be assessed for string distance. I’m using all available string distance methods in the stringdist function so I can filter the data based on the method(s) that provide the best results. The definitions of the different string distance methods can be found <a href="https://www.rdocumentation.org/packages/stringdist/versions/0.9.4.6/topics/stringdist-metrics">here</a></p>
+<p>A cross join is used to match up all the football names with all of the school names so each combination can be assessed for string distance. I’m using all available string distance methods in the stringdist function so I can filter the data based on the method(s) that provide the best results. The definitions of the different string distance methods can be found <a href="https://www.rdocumentation.org/packages/stringdist/versions/0.9.4.6/topics/stringdist-metrics">here</a>.</p>
 <pre class="r"><code>fuzzy_text_matching &lt;- function(x, y, text = NULL, before_after = NULL) {
   # x = transformed school data
   # y = transformed football data
   # get unique school names
   unique_school_names &lt;- x %&gt;% 
-    filter(school_year_start == 2015 &amp; school_main_campus_flag == 1) %&gt;% 
+    filter(school_year_start == max(school_year_start) &amp; school_main_campus_flag == 1) %&gt;% 
     select(school_name) %&gt;%
     distinct() %&gt;% 
     mutate(dummy = 1) # create dummy variable to join on
@@ -1790,7 +1790,8 @@ dimSchool &lt;- school_data_transform %&gt;%
            bowl_flag,
            national_championship_flag)
   
-  # I intentionally want to bind these two tibbles together by the column orders specified above so I get a row for the school and a row for the opponent in the final table
+  # I intentionally want to bind these two tibbles together by the column orders
+  # specified above so I get a row for the school and a row for the opponent in the final table
   final_football_ordered &lt;- rbindlist(list(winner, loser)) %&gt;% 
     as_tibble() %&gt;% 
     arrange(game_id)

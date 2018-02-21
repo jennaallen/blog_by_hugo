@@ -59,7 +59,7 @@ library(lubridate)
 
 ## College Scorecard School Data
 
-There are two data sources for this project. I am using the available API provided by [College Scorecard](https://collegescorecard.ed.gov/data/documentation/) to extract the relevant school data. The College Scorecard combines data from the Integrated Postsecondary Education Data System (IPEDS), National Student Loan Data System (NSLDS), and various other sources into one dataset and makes it available through an API. The extraction process includes selecting the desired data fields (there are a ton to choose from), determining which years to pull data for, and creating the API call to return the data. The latest full dataset available is for the 2015-2016 school year. I will be extracting the last 5 school years worth of data (2011-2012, 2012-2013, 2013-2014, 2014-2015, 2015-2016).
+I am using the available API provided by [College Scorecard](https://collegescorecard.ed.gov/data/documentation/) to extract the relevant school data. The College Scorecard combines data from the Integrated Postsecondary Education Data System (IPEDS), National Student Loan Data System (NSLDS), and various other sources into one dataset and makes it available through an API. The extraction process includes selecting the desired data fields (there are a ton to choose from), determining which years to pull data for, and creating the API call to return the data. The latest full dataset available is for the 2015-2016 school year. I will be extracting the last 5 school years worth of data (2011-2012, 2012-2013, 2013-2014, 2014-2015, 2015-2016).
 
 In R, there is an existing package called [rscorecard](https://cran.r-project.org/web/packages/rscorecard/rscorecard.pdf) that "is simply a method for converting idiomatic R code into a properly formatted URL string that is then queried." This package does require an API key which I requested [here](https://api.data.gov/signup/). I added the API key to a .Renviron file to maintain security [best practices](https://db.rstudio.com/best-practices/managing-credentials/). 
 
@@ -93,7 +93,7 @@ For the football data, I am going to scrape data from http://www.sports-referenc
 ```{r get-football-fun, cache = TRUE}
 get_football_data <- function(games, years) {
   if (!(games %in% c("schedule", "bowls"))) {
-    stop("Argument must be either 'schedule' or 'bowls'", call. = FALSE)
+    stop("Game arg must be either 'schedule' or 'bowls'", call. = FALSE)
   }
   # create urls based on the desired years and if user wants all games or bowl games
   urls <- paste0("https://www.sports-reference.com/cfb/years/",years,"-",games,".html")
@@ -289,13 +289,13 @@ football_data_transform <- clean_football_data(football_data_staging, football_d
  )
 ```
 
-Ok, I have all the school and football data I want and it's cleaned up. Now, I'm ready to create the data model.
+Now that the school and football data are clean, I'm ready to create the data model.
 
 # Dimensional Model
 
 I am going to store this data in MySQL running on AWS RDS. To initially setup an AWS RDS instance, I loosely followed these [directions](http://www.jason-french.com/blog/2014/07/03/using-r-with-mysql-databases/).
 
-For this project, I'm going to use a star schema. The first step in creating the dimensional data model is profiling the data in order to better understand how the data from the two different sources fits together. During this profiling step, I determined what data types best fit each attribute in both data sets and what sizes to make each data type.
+For this project, I'm going to use a star schema. The first step in creating the dimensional data model is profiling the data in order to better understand how the data from the two different sources fits together. During this profiling step, I determined what data types best fit each variable in both data sets and what sizes to make each data type.
 
 ```{r data-profile, results = 'hide'}
 school_data_char_length <- school_data_transform %>% 
@@ -346,7 +346,7 @@ As mentioned previously, the only variable that ties the school data and the foo
 
 I created a function to perform the fuzzy text matching. One benefit of this function is that it allows the user to concatenate text either before or after the football school name prior to the fuzzy matching. This is important because several of the school names from the football data are shortened (e.g Arizona instead of The University of Arizona). This concantenation can improve the fuzzy matching in some cases.
 
-A cross join is used to match up all the football names with all of the school names so each combination can be assessed for string distance. I'm using all available string distance methods in the stringdist function so I can filter the data based on the method(s) that provide the best results. The definitions of the different string distance methods can be found [here](https://www.rdocumentation.org/packages/stringdist/versions/0.9.4.6/topics/stringdist-metrics) 
+A cross join is used to match up all the football names with all of the school names so each combination can be assessed for string distance. I'm using all available string distance methods in the stringdist function so I can filter the data based on the method(s) that provide the best results. The definitions of the different string distance methods can be found [here](https://www.rdocumentation.org/packages/stringdist/versions/0.9.4.6/topics/stringdist-metrics). 
 
 ```{r fuzzy-text-fun}
 fuzzy_text_matching <- function(x, y, text = NULL, before_after = NULL) {
@@ -354,7 +354,7 @@ fuzzy_text_matching <- function(x, y, text = NULL, before_after = NULL) {
   # y = transformed football data
   # get unique school names
   unique_school_names <- x %>% 
-    filter(school_year_start == 2015 & school_main_campus_flag == 1) %>% 
+    filter(school_year_start == max(school_year_start) & school_main_campus_flag == 1) %>% 
     select(school_name) %>%
     distinct() %>% 
     mutate(dummy = 1) # create dummy variable to join on
@@ -751,7 +751,8 @@ create_factGame <- function(football, dates, text_match) {
            bowl_flag,
            national_championship_flag)
   
-  # I intentionally want to bind these two tibbles together by the column orders specified above so I get a row for the school and a row for the opponent in the final table
+  # I intentionally want to bind these two tibbles together by the column orders
+  # specified above so I get a row for the school and a row for the opponent in the final table
   final_football_ordered <- rbindlist(list(winner, loser)) %>% 
     as_tibble() %>% 
     arrange(game_id)
