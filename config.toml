@@ -1,4 +1,4 @@
-baseurl = "/"
+baseurl = "https://www.jennadallen.com/"
 DefaultContentLanguage = "en"
 #DefaultContentLanguage = "ja"
 title = "jenna allen"
@@ -10,9 +10,10 @@ metaDataFormat = "yaml"
 #pygmentsCodefencesGuessSyntax = true
 #pygmentsUseClassic = true
 #pygmentOptions = "linenos=inline"
-#disqusShortname = "XXX"
-#googleAnalytics = "XXX"
+disqusShortname = "jennadallen"
+googleAnalytics = "UA-114395698-1"
 ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
+enableEmoji = true
 
 [Params]
   #subtitle = "Build a beautiful and simple website in minutes"
@@ -24,7 +25,7 @@ ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
   comments = true
   readingTime = true
   useHLJS = true
-#  gcse = "012345678901234567890:abcdefghijk" # Get your code from google.com/cse. Make sure to go to "Look and Feel" and change Layout to "Full Width" and Theme to "Classic"
+  gcse = "011359301797005884710:spcs0zxv3tg" # Get your code from google.com/cse. Make sure to go to "Look and Feel" and change Layout to "Full Width" and Theme to "Classic"
 
 [[Params.bigimg]]
   src = "img/skydive.png"
