@@ -12,9 +12,6 @@ tags:
   - data-manipulation
   - college-scorecard
   - football-data
-output:
-  blogdown::html_page:
-    toc: true
 ---
 
 ```{r setup, include = FALSE}

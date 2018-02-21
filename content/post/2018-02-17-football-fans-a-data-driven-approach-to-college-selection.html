@@ -12,37 +12,9 @@ tags:
   - data-manipulation
   - college-scorecard
   - football-data
-output:
-  blogdown::html_page:
-    toc: true
 ---
 
 
-<div id="TOC">
-<ul>
-<li><a href="#abstract">Abstract</a></li>
-<li><a href="#data-warehouse-opportunity-and-objectives">Data Warehouse Opportunity and Objectives</a></li>
-<li><a href="#source-data">Source Data</a><ul>
-<li><a href="#college-scorecard-school-data">College Scorecard School Data</a></li>
-<li><a href="#football-data">Football Data</a></li>
-</ul></li>
-<li><a href="#data-cleanup">Data Cleanup</a><ul>
-<li><a href="#school-data">School Data</a></li>
-<li><a href="#football-data-1">Football Data</a></li>
-</ul></li>
-<li><a href="#dimensional-model">Dimensional Model</a></li>
-<li><a href="#fuzzy-text-matching">Fuzzy Text Matching</a></li>
-<li><a href="#get-missing-data">Get Missing Data</a></li>
-<li><a href="#creating-tables-in-the-data-warehouse">Creating Tables in the Data Warehouse</a><ul>
-<li><a href="#dimschool">dimSchool</a></li>
-<li><a href="#dimdate-and-dimschoolyear">dimDate and dimSchoolYear</a></li>
-<li><a href="#factgame">factGame</a></li>
-<li><a href="#factschool">factSchool</a></li>
-<li><a href="#create-view-in-sql">Create View in SQL</a></li>
-</ul></li>
-<li><a href="#creating-tableau-dashboard">Creating Tableau Dashboard</a></li>
-</ul>
-</div>
 
 <p>This was a project that I originally did for my Data Warehousing class in grad school using Microsoft SQL server and SSIS. I’ve been taking a lot of datacamp courses lately and wanted to put what I learned about the tidyverse into action. This project has a lot of data manipulation and cleanup tasks, so I thought it would be a good candidate to convert what I did in grad school to R and MySQL. Enjoy!</p>
 <div id="abstract" class="section level1">
