@@ -1007,4 +1007,4 @@ I am going to start by building a dashboard in Tableau. Maybe if I get ambitious
 
 Users can filter the data based on various fields and then see the corresponding game stats for the filtered list of schools. The user can also select the years they want to view data for and can choose to view the means or medians of the data for the given years selected. A larger view of the dashboard can be found [here.](https://public.tableau.com/profile/jenna.allen#!/vizhome/football_school_dataviz/SchoolSelectionDashboard)
 
-<iframe width = "100%" height = "750" src="https://public.tableau.com/views/football_school_dataviz/SchoolSelectionDashboard?:showVizHome=no&:embed=true"/>
+<iframe width = "100%" height = "750" src="https://public.tableau.com/views/football_school_dataviz/SchoolSelectionDashboard?:showVizHome=no&:embed=true"></iframe>
