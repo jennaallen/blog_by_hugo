@@ -1278,7 +1278,7 @@ text_matches_for_review &lt;- fuzzy_text_res %&gt;%
   filter(jw &lt; 0.20) %&gt;% 
   mutate(correct_match = 1) %&gt;% # add column for user to manually update with 0 if the match is no good
   edit()</code></pre>
-<pre class="r"><code>#this is an iterative process where you can add the correct matches to a final match data table until all schools are matched
+<pre class="r"><code># this is an iterative process where you can add the correct matches to a final match data table until all schools are matched
 fuzzy_text_match_final &lt;- text_matches_for_review %&gt;% 
   filter(correct_match == 1) %&gt;% 
   select(football_name, school_name)</code></pre>
@@ -1292,7 +1292,7 @@ fuzzy_text_conc_before_review &lt;- fuzzy_text_conc_before %&gt;%
   filter(jw &lt; 0.10) %&gt;% 
   mutate(correct_match = 1) %&gt;%
   edit()</code></pre>
-<pre class="r"><code>#this is an iterative process where you can add the correct matches to a final match data table until all schools are matched
+<pre class="r"><code># this is an iterative process where you can add the correct matches to a final match data table until all schools are matched
 fuzzy_text_match_final &lt;- fuzzy_text_conc_before_review %&gt;% 
   filter(correct_match == 1) %&gt;% 
   select(football_name, school_name) %&gt;% 
