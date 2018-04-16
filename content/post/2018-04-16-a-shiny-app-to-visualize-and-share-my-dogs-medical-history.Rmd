@@ -15,7 +15,7 @@ tags:
 
 As a digital nomad traveling with 2 dogs, keeping track of all their medical and vaccine records has been challenging. Especially since one of our dogs has had some recent health issues. I needed a way to organize all the vet visits, test results, vaccine certificates, etc. as well as be able to share them with new vets and our primary vet back in Colorado. Thus, an R Shiny app was born.
 <br><br>
-![](/post/creating-a-shiny-app-to-visualize-and-share-my-dogs-medical-history/app_demo.gif)
+![](/post/a-shiny-app-to-visualize-and-share-my-dogs-medical-history/app_demo.gif)
 
 You can view the app [here.](https://jennadallen.shinyapps.io/pet-records-app)
 
@@ -31,7 +31,7 @@ So, with a rough draft of what my app would look like, I started to organize the
 
 I decided to store the structured data in a MySQL database running on AWS and the unstructured data (images and PDFs) in Amazon S3. I stored the URLs to the documents housed on S3 in various fields in the MySQL database. The final data model looked like this:
 
-![](/post/creating-a-shiny-app-to-visualize-and-share-my-dogs-medical-history/final_data_model.jpeg)
+![](/post/a-shiny-app-to-visualize-and-share-my-dogs-medical-history/final_data_model.jpeg)
 
 ## Dynamic Data
 
@@ -122,12 +122,12 @@ I then created a new user and group to allow access to the specific S3 bucket I 
 1.  Navigate to https://console.aws.amazon.com/iam/ and sign in with the admin user created above
 2.  In the navigation pane, choose Users and then choose Add user
 3.  Type in the name of the user and select "Programmatic access" as the access type to generate an access key ID and secret access key
-![](/post/creating-a-shiny-app-to-visualize-and-share-my-dogs-medical-history/adduser.jpeg)
+![](/post/a-shiny-app-to-visualize-and-share-my-dogs-medical-history/adduser.jpeg)
 4.  Choose Next: Permissions
 5.  On the Set permissions for user page, choose Add user to group
 6.  Choose Create group
 7.  Type in a "Group Name" and select the policy you want to apply
-![](/post/creating-a-shiny-app-to-visualize-and-share-my-dogs-medical-history/creategroup.jpeg)
+![](/post/a-shiny-app-to-visualize-and-share-my-dogs-medical-history/creategroup.jpeg)
 
 If you search for S3 in the search window, there are a few options that come up. I wanted to allow read only access to a specific bucket within S3, so none of the predefined policies would work for me. There is an AWS managed policy that provides read only access to all buckets, which you can choose if it fits your needs. Instead I needed to create my own policy.
 
@@ -136,9 +136,9 @@ To do this I did the following:
 8.  Choose Create policy
 9.  Choose S3 as the Service
 10. Under actions select the "Read" check box
-![](/post/creating-a-shiny-app-to-visualize-and-share-my-dogs-medical-history/createpolicy.jpeg)
+![](/post/a-shiny-app-to-visualize-and-share-my-dogs-medical-history/createpolicy.jpeg)
 11. Under resources I added the specific bucket I wanted to allow access to by selecting "Add ARN" and typing in the name of the bucket, select the "Any" box for objects
-![](/post/creating-a-shiny-app-to-visualize-and-share-my-dogs-medical-history/policy.jpeg)
+![](/post/a-shiny-app-to-visualize-and-share-my-dogs-medical-history/policy.jpeg)
 12. Choose Review Policy, provide a name and description and create the policy
 13. Check the box next to the newly created policy
 14. Choose Review and then Create User
