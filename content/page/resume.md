@@ -140,7 +140,7 @@ Broomfield, CO </h5>
 <img class="image-exp" src = "/img/level3.png">
 <h5>Business Analyst, Sales Effectiveness, Level 3 <br><br>
 Broomfield, CO </h5>
-2013 - 2014
+2013 — 2014
 
 *  Created financial, operational, and market planning Tableau dashboards for Sales Regional Vice Presidents, General Managers, and Sales support teams to facilitate better, faster decentralized decision-making
 *  Wrote high quality SQL quires to retrieve and analyze data from Microsoft SQL Server, Oracle, and MySQL
@@ -154,7 +154,7 @@ Broomfield, CO </h5>
 <img class="image-exp" src = "/img/biodesix.jpg">
 <h5>Research and Development Laboratory Manager, Biodesix <br><br>
 Aurora, CO </h5>
-2008 - 2013
+2008 — 2013
 
 *  Worked on a team of 3 to transform an empty room into a CLIA certified laboratory in 6 months
 *  Conducted cancer research, generated data, and collaborated with our team of physicists, scientists, and statisticians to apply various analytical techniques to answer difficult questions
@@ -165,7 +165,7 @@ Aurora, CO </h5>
 <img class="image-exp" src = "/img/cu.png">
 <h5>Professional Research Assistant, University of Colorado Health Sciences Center <br><br>
 Aurora, CO </h5>
-2006-2008
+2006 — 2008
 
 * Evaluated and implemented different analytical approaches to various research problems
 * Evaluated and utilized complex analysis software
