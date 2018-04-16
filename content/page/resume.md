@@ -106,8 +106,16 @@ Markdown <br>
 
 <center> <h3>Experience </h3> </center>
 <br>
-<img class="image-exp" src = "/img/convergys.png">
+<img class="image-exp" src = "/img/tntp.jpg">
 
+<h5>Temporary Analyst, TNTP <br><br>
+Remote </h5>
+2018 — Present
+
+*  Responsible for part-time temporary analytic projects as the need arises
+
+<br>
+<img class="image-exp" src = "/img/convergys.png">
 <h5>Senior Specialist, Analytic Consulting, Convergys <br><br>
 Remote </h5>
 2015 — 2017
