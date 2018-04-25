@@ -143,7 +143,7 @@ Broomfield, CO </h5>
 2013 — 2014
 
 *  Created financial, operational, and market planning Tableau dashboards for Sales Regional Vice Presidents, General Managers, and Sales support teams to facilitate better, faster decentralized decision-making
-*  Wrote high quality SQL quires to retrieve and analyze data from Microsoft SQL Server, Oracle, and MySQL
+*  Wrote high quality SQL queries to retrieve and analyze data from Microsoft SQL Server, Oracle, and MySQL
 *  Learned to navigate a broad range of data sources and how and when to use each one
 *  Collaborated with data scientists to conduct advanced analyses in R to explore the elasticity of demand and the impact of increasing customer prices
 *  Identified root cause of low margin sales and worked with various stakeholders to implement new renewal business policies to ensure profitable pricing
