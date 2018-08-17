@@ -60,7 +60,7 @@ I am a data analyst who loves using my programming skills to creatively solve pr
 <h3>Education </h3>
 <b>University of Denver, Daniels College of Business </b><br>
 Denver, CO <br>  
-Master of Business Administration <br> 
+MBA <br> 
 Concentration in Business Analytics <br> 
 March 2015    
 
