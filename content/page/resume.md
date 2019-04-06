@@ -106,11 +106,24 @@ Markdown <br>
 
 <center> <h3>Experience </h3> </center>
 <br>
+<img class="image-exp" src = "/img/candid_logo.jpg">
+
+<h5>Data Reporting Analyst, Candid <br><br>
+Remote </h5>
+2018 — Present
+
+* Work with the Sales team to scope client needs for custom datasets
+* Design SQL queries to extract data that meets clients' needs
+* Assist in the generation of sales estimates, client communication, and post-delivery client support
+* Lead technical efforts to increase organizational efficiencies through the design, implementation, and use of standards and automated processes
+* Partner with Director to formally review and re-design the compensation report
+
+<br>
 <img class="image-exp" src = "/img/tntp.jpg">
 
 <h5>Temporary Analyst, TNTP <br><br>
 Remote </h5>
-2018 — Present
+2018 — 2018
 
 *  Responsible for part-time temporary analytic projects as the need arises
 
