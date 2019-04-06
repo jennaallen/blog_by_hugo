@@ -4,7 +4,7 @@ comments: false
 bigimg: [{src: "/img/bikeride.png"}]
 ---
 
-My name is Jenna Allen and I am an aspiring data scientist. I love thinking creatively and using the statistical programming language R to find actionable insights. In addition to analyzing and visualizing data in R, I find it particularly satisfying to use it to automate manual tasks such as reporting. I love to use my analytic skills for good, and I am thankful to work at Candid where I get to do meaningful and socially impactful work.
+I’m a Data Reporting Analyst at Candid, a 501c3 nonprofit organization that connects people who want to change the world to the resources they need to do it. I love thinking creatively and using the statistical programming language R to find actionable insights. In addition to analyzing and visualizing data in R, I find it particularly satisfying to use it to automate manual tasks such as reporting. I love to use my analytic skills for good, and I am thankful to work at Candid where I get to do meaningful and socially impactful work.
 
 I have an undergraduate degree in biochemistry and worked in the biotech field for the first several years of my career. After deciding that I wanted a change, I went back to school and earned an MBA with a concentration in Business Analytics. In grad school, I made the leap from scientist to data analyst and I haven't looked back. 
 
@@ -17,3 +17,5 @@ Being a digital nomad has afforded me the opportunity to work in places where I 
 This blog is built with [blogdown](https://github.com/rstudio/blogdown) and [Hugo](https://gohugo.io) using the [Beautiful Hugo](https://github.com/halogenica/beautifulhugo) theme. All blog posts are released under a [Creative Commons Attribution-ShareAlike 4.0 International License.](https://creativecommons.org/licenses/by-sa/4.0/)
 
 You can find the reproducible sources of each blog post [here.](https://github.com/jennaallen/blog_by_hugo/tree/master/content/post)
+
+All opinions and views are my own and do not represent my employer.
