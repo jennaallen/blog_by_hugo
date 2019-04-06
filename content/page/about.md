@@ -4,7 +4,7 @@ comments: false
 bigimg: [{src: "/img/bikeride.png"}]
 ---
 
-My name is Jenna Allen and I am an aspiring data scientist. I love thinking creatively and using the statistical programming language R to find actionable insights. In addition to analyzing and visualizing data in R, I find it particularly satisfying to use it to automate manual tasks such as reporting. I want to use my analytic skills for good, and I am on a quest to find an organization that will pay me to do meaningful and socially impactful work.
+My name is Jenna Allen and I am an aspiring data scientist. I love thinking creatively and using the statistical programming language R to find actionable insights. In addition to analyzing and visualizing data in R, I find it particularly satisfying to use it to automate manual tasks such as reporting. I love to use my analytic skills for good, and I am thankful to work at Candid where I get to do meaningful and socially impactful work.
 
 I have an undergraduate degree in biochemistry and worked in the biotech field for the first several years of my career. After deciding that I wanted a change, I went back to school and earned an MBA with a concentration in Business Analytics. In grad school, I made the leap from scientist to data analyst and I haven't looked back. 
 
